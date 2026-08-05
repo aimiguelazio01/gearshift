@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GEARSHIFT AUTOMOTIVE — NFC Card Writer Studio</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Background Watermark Logo -->
+  <div class="bg-watermark"></div>
+
+  <!-- Header Navbar — GEARSHIFT Chrome Branding -->
+  <header class="navbar">
+    <div class="brand">
+      <div class="brand-logo">
+        <img src="Logo_transp.png" alt="GEARSHIFT AUTOMOTIVE" class="logo-img">
+      </div>
+      <div class="brand-title">
+        <h1 id="txt-app-title">GEARSHIFT AUTOMOTIVE</h1>
+        <p id="txt-app-subtitle">NFC Card Writer Studio • Controlador Serie NTAG215 & PN532</p>
+      </div>
+    </div>
+
+    <!-- USB Port Switch Controls & Language Switcher -->
+    <div class="connection-controls">
+      <div class="baud-selector">
+        <select id="baud-select">
+          <option value="115200" selected>115200 Baud</option>
+          <option value="9600">9600 Baud</option>
+          <option value="57600">57600 Baud</option>
+        </select>
+      </div>
+
+      <div class="port-status-badge" id="port-status-badge">
+        <span class="status-dot"></span>
+        <span id="port-status-text">Desconectado</span>
+      </div>
+
+      <button id="btn-usb-switch" class="btn-usb-switch">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v6m0 0l-3-3m3 3l3-3M6 12a6 6 0 1012 0 6 6 0 00-12 0z"/>
+        </svg>
+        <span id="txt-btn-usb">Conectar Porta USB</span>
+      </button>
+
+      <button id="btn-lang-toggle" class="btn-lang-toggle">
+        <span>🇵🇹 PT</span>
+      </button>
+
+      <button id="btn-close-app" class="btn-close-app" title="Fechar Aplicação">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        <span id="txt-btn-close">Fechar</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main App Container -->
+  <main class="app-container">
+    
+    <!-- NFC Payload Writer Section -->
+    <section class="card card-writer">
+      <div class="card-header">
+        <div class="card-title" id="txt-card-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36"/>
+            <path d="M9.46 9.88a4 4 0 0 1 0 4.24"/>
+            <path d="M12.91 11.44a1 1 0 0 1 0 1.12"/>
+            <rect x="2" y="2" width="20" height="20" rx="5"/>
+          </svg>
+          Gravador de Cartões NFC NTAG215
+        </div>
+      </div>
+
+      <!-- Main Input Field -->
+      <div class="form-group">
+        <div class="form-label">
+          <span id="field-label-desc">Endereço Web (URL) da App do Cliente</span>
+          <span class="char-counter" id="byte-counter">0 / 504 Bytes</span>
+        </div>
+        <div class="input-wrapper">
+          <input type="text" id="payload-input" class="input-field" value="http://localhost:3000/portal/" placeholder="http://localhost:3000/portal/nomecliente">
+        </div>
+      </div>
+
+      <!-- Action Button: Write Card -->
+      <div class="action-buttons">
+        <button id="btn-write" class="btn-primary-gearshift">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+          <span id="txt-btn-write">Write Card</span>
+        </button>
+      </div>
+
+      <!-- Action Banner -->
+      <div class="write-instruction-banner">
+        <div class="banner-icon">📡</div>
+        <div class="banner-text" id="banner-text">
+          <strong>Passo 1:</strong> Verifique a URL do cliente e clique em <strong>Write Card</strong>.<br>
+          <strong>Passo 2:</strong> Encoste fisicamente o seu cartão NTAG215 no módulo leitor PN532 para gravar!
+        </div>
+      </div>
+    </section>
+
+    <!-- Serial Console Log Card -->
+    <section class="card console-card">
+      <div class="card-header terminal-header">
+        <div class="card-title" id="txt-monitor-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5"/>
+            <line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+          Monitor Série USB em Tempo Real (Serial Monitor)
+        </div>
+        <div class="terminal-controls">
+          <button id="btn-clear-log" class="btn-icon-sm" id="txt-btn-clear">Limpar Consola</button>
+        </div>
+      </div>
+
+      <div id="terminal-output" class="terminal-output">
+        <div class="log-line">
+          <span class="log-time">[GEARSHIFT]</span>
+          <span class="log-msg info" id="txt-system-ready">Sistema pronto. Clique em "Conectar Porta USB" para ligar ao leitor PN532 ou envie diretamente para o Arduino.</span>
+        </div>
+      </div>
+
+      <!-- Raw Serial Command Prompt -->
+      <div class="cmd-prompt">
+        <input type="text" id="cmd-input" class="cmd-input" placeholder="Enviar comando serie (ex: WRITE:URL:http://localhost:3000/portal/joaoferreira ou STATUS)...">
+        <button id="btn-cmd-send" class="btn-secondary"><span id="txt-btn-send">Enviar</span></button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Waiting... Modal Popup Overlay -->
+  <div id="waiting-modal-overlay" class="modal-overlay hidden">
+    <div class="waiting-modal-content">
+      <div class="waiting-spinner-container">
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring-outer"></div>
+        <div class="spinner-icon">📡</div>
+      </div>
+      
+      <div class="waiting-text-group">
+        <h2 id="txt-waiting-title">A aguardar... / Waiting...</h2>
+        <p id="txt-waiting-desc">A compilar código e a gravar no leitor PN532... Encoste o seu cartão NTAG215 agora!</p>
+      </div>
+
+      <div class="waiting-progress-status" id="waiting-status-line">
+        <span class="dot-flashing"></span>
+        <span id="txt-waiting-sub">A enviar dados via USB / Serial...</span>
+      </div>
+
+      <button id="btn-cancel-waiting" class="btn-cancel-waiting">
+        <span id="txt-btn-cancel-waiting">Cancelar</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

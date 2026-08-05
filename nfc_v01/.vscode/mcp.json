@@ -1,0 +1,11 @@
+{
+    "servers": {
+        "arduino-mcp-server": {
+            "type": "stdio",
+            "command": "C:\\Users\\corsair\\tools\\arduino-mcp-server\\arduino-mcp-server.exe",
+            "env": {
+                "ARDUINO_CLI_BIN": "C:\\Program Files\\Arduino CLI\\arduino-cli.exe"
+            }
+        }
+    }
+}
