@@ -34,7 +34,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     } else if (typeof window !== 'undefined') {
       const origin = window.location.origin;
       if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-        setPublicBaseUrl('https://gearshift-one.vercel.app');
+        setPublicBaseUrl('https://gearshift1.vercel.app');
       } else {
         setPublicBaseUrl(origin);
       }

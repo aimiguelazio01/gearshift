@@ -22,18 +22,18 @@ const KEYS = {
 
 export const settings = {
   get: (): WorkshopSettings => {
-    if (typeof window === 'undefined') return { publicBaseUrl: 'https://gearshift-one.vercel.app', nfcStudioUrl: 'http://localhost:3001' };
+    if (typeof window === 'undefined') return { publicBaseUrl: 'https://gearshift1.vercel.app', nfcStudioUrl: 'http://localhost:3001' };
     const raw = localStorage.getItem(KEYS.settings);
     if (raw) {
       try {
         const p = JSON.parse(raw);
         return {
-          publicBaseUrl: p.publicBaseUrl || 'https://gearshift-one.vercel.app',
+          publicBaseUrl: p.publicBaseUrl || 'https://gearshift1.vercel.app',
           nfcStudioUrl: p.nfcStudioUrl || 'http://localhost:3001',
         };
       } catch {}
     }
-    return { publicBaseUrl: 'https://gearshift-one.vercel.app', nfcStudioUrl: 'http://localhost:3001' };
+    return { publicBaseUrl: 'https://gearshift1.vercel.app', nfcStudioUrl: 'http://localhost:3001' };
   },
   update: (newSettings: Partial<WorkshopSettings>): WorkshopSettings => {
     const current = settings.get();
