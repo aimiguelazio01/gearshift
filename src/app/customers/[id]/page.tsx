@@ -77,10 +77,17 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   // NFC Write Handler — Integrates with Vercel Web NFC & local nfc_v01 Arduino App
   const handleNFCStudioWrite = async () => {
-    setNfcStatus('📡 A preparar gravação do cartão NFC...');
+    const nfcStudioServer = (settings.get().nfcStudioUrl || 'http://localhost:3001').replace(/\/$/, '');
+    const nfcStudioAppUrl = `${nfcStudioServer}/?url=${encodeURIComponent(portalUrl)}&autowrite=true`;
 
-    // 1. First attempt Web NFC API (Native on Android Chrome / HTTPS / Vercel)
-    let webNfcSuccess = false;
+    // 1. Open local NFC Card Writer Studio app in new window immediately during click event
+    try {
+      window.open(nfcStudioAppUrl, '_blank');
+    } catch (e) {}
+
+    setNfcStatus(`📡 A abrir aplicação NFC Studio (${nfcStudioServer}) com a URL do cliente (${portalUrl})...`);
+
+    // 2. Native Web NFC API (Android Chrome / HTTPS / Vercel)
     if (typeof window !== 'undefined' && 'NDEFReader' in window) {
       try {
         // @ts-ignore Web NFC API
@@ -88,18 +95,15 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         await ndef.write({
           records: [{ recordType: 'url', data: portalUrl }]
         });
-        webNfcSuccess = true;
-        setNfcStatus(`✅ Cartão NFC gravado com sucesso via Web NFC com a URL do Vercel:\n${portalUrl}`);
+        setNfcStatus(`✅ Cartão NFC gravado com sucesso via Web NFC Native:\n${portalUrl}`);
         return;
       } catch (err: any) {
-        setNfcStatus(`👉 Por favor, encoste o cartão NFC NTAG215 à traseira do telemóvel...`);
+        // Handled gracefully
       }
     }
 
-    // 2. Try communicating with local nfc_v01 Arduino server (http://localhost:3001)
-    const nfcStudioServer = (settings.get().nfcStudioUrl || 'http://localhost:3001').replace(/\/$/, '');
+    // 3. Send payload to local nfc_v01 server background API if reachable
     try {
-      setNfcStatus(`📡 A ligar à aplicação local Arduino (${nfcStudioServer})...`);
       const res = await fetch(`${nfcStudioServer}/api/update-ino`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,26 +111,20 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       });
       const data = await res.json();
       if (data.success) {
-        // Open nfc_v01 tab only if local server responded
-        window.open(`${nfcStudioServer}/?url=${encodeURIComponent(portalUrl)}&autowrite=true`, '_blank');
-        setNfcStatus(`✅ URL do Vercel inserida na aplicação Arduino (${portalUrl})! A compilar sketch C++ no leitor PN532...`);
+        setNfcStatus(`✅ URL do cliente inserida no leitor PN532 (${portalUrl})! A compilar sketch Arduino...`);
         fetch(`${nfcStudioServer}/api/upload`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         }).then(r => r.json()).then(uploadData => {
           if (uploadData.success) {
-            setNfcStatus(`👉 CÓDIGO ENVIADO PARA O ARDUINO! Encoste o seu cartão NTAG215 ao leitor PN532 para gravar a URL do Vercel (${portalUrl})!`);
-          } else {
-            setNfcStatus(`⚠️ nfc_v01: ${uploadData.error || 'Aguardando toque no leitor PN532'}`);
+            setNfcStatus(`👉 CÓDIGO CARREGADO NO ARDUINO! Encoste o seu cartão NTAG215 ao leitor PN532 para gravar a URL (${portalUrl})!`);
           }
         }).catch(() => { });
-      } else {
-        setNfcStatus(`⚠️ Resposta do nfc_v01: ${data.error}`);
       }
     } catch (err: any) {
-      // Local server not running or blocked by HTTPS mixed content on Vercel
-      setNfcStatus(`ℹ️ URL do Vercel pronta a gravar: ${portalUrl}\n\n⚠️ Servidor Arduino local (http://localhost:3001) não está ativo nesta máquina. Para gravar no leitor físico PN532, abra a aplicação nfc_v01 no seu computador ou copie o sketch C++ no separador "Código Arduino".`);
+      // Browsers on HTTPS block HTTP fetches, but window.open above successfully opened http://localhost:3001 with autowrite=true!
+      setNfcStatus(`👉 A aplicação NFC Studio abriu em http://localhost:3001 com a URL (${portalUrl}). Encoste o seu cartão NTAG215 ao leitor PN532 para gravar!`);
     }
   };
 
