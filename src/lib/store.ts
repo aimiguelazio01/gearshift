@@ -1,6 +1,7 @@
 import {
   Customer, Vehicle, Part, Supplier, WorkOrder, LaborLine, PartLine,
   StockMovement, Invoice, Payment, User, WorkOrderStatus, InvoiceStatus, Lift,
+  WorkshopSettings,
 } from './types';
 import { generateId, daysFromNow, slugify } from './utils';
 
@@ -15,8 +16,34 @@ const KEYS = {
   invoices: 'workshop_invoices',
   users: 'workshop_users',
   lifts: 'workshop_lifts',
+  settings: 'workshop_settings',
   seeded: 'workshop_seeded',
 } as const;
+
+export const settings = {
+  get: (): WorkshopSettings => {
+    if (typeof window === 'undefined') return { publicBaseUrl: 'https://gearshift-one.vercel.app', nfcStudioUrl: 'http://localhost:3001' };
+    const raw = localStorage.getItem(KEYS.settings);
+    if (raw) {
+      try {
+        const p = JSON.parse(raw);
+        return {
+          publicBaseUrl: p.publicBaseUrl || 'https://gearshift-one.vercel.app',
+          nfcStudioUrl: p.nfcStudioUrl || 'http://localhost:3001',
+        };
+      } catch {}
+    }
+    return { publicBaseUrl: 'https://gearshift-one.vercel.app', nfcStudioUrl: 'http://localhost:3001' };
+  },
+  update: (newSettings: Partial<WorkshopSettings>): WorkshopSettings => {
+    const current = settings.get();
+    const updated = { ...current, ...newSettings };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(KEYS.settings, JSON.stringify(updated));
+    }
+    return updated;
+  },
+};
 
 // ── Generic CRUD helpers ──
 function getAll<T>(key: string): T[] {

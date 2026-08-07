@@ -92,6 +92,11 @@ export interface Lift {
   current_work_order_id?: string | null;
 }
 
+export interface WorkshopSettings {
+  publicBaseUrl: string;
+  nfcStudioUrl?: string;
+}
+
 export interface WorkOrder {
   id: string;
   customer_id: string; // FK -> Customer

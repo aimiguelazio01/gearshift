@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
 import Modal from '@/components/Modal';
 import StatusBadge from '@/components/StatusBadge';
-import { customers, vehicles, workOrders } from '@/lib/store';
+import { customers, vehicles, workOrders, settings } from '@/lib/store';
 import { useLanguage } from '@/context/LanguageContext';
 import { generateArduinoNFCCode } from '@/lib/nfcGenerator';
 import { slugify } from '@/lib/utils';
@@ -23,6 +23,32 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const [copied, setCopied] = useState(false);
   const [nfcStatus, setNfcStatus] = useState<string | null>(null);
 
+  // Web Domain / Base URL configuration for NFC & QR Codes
+  const [publicBaseUrl, setPublicBaseUrl] = useState<string>('');
+  const [domainSaved, setDomainSaved] = useState<boolean>(false);
+
+  useEffect(() => {
+    const saved = settings.get();
+    if (saved.publicBaseUrl) {
+      setPublicBaseUrl(saved.publicBaseUrl);
+    } else if (typeof window !== 'undefined') {
+      const origin = window.location.origin;
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        setPublicBaseUrl('https://gearshift-one.vercel.app');
+      } else {
+        setPublicBaseUrl(origin);
+      }
+    }
+  }, []);
+
+  const handleSaveDomain = () => {
+    if (publicBaseUrl) {
+      settings.update({ publicBaseUrl });
+      setDomainSaved(true);
+      setTimeout(() => setDomainSaved(false), 2500);
+    }
+  };
+
   const reload = useCallback(() => {
     const cust = customers.getByIdOrSlug(id);
     if (cust) {
@@ -39,9 +65,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   }
 
   const customerSlug = slugify(customer.name);
-  const portalUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/portal/${customerSlug}`
-    : `http://localhost:3000/portal/${customerSlug}`;
+  const cleanBaseUrl = (publicBaseUrl || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')).trim().replace(/\/$/, '');
+  const portalUrl = `${cleanBaseUrl}/portal/${customerSlug}`;
+  const isLocalhostUrl = cleanBaseUrl.includes('localhost') || cleanBaseUrl.includes('127.0.0.1');
 
   const handleCopyLink = (textToCopy: string) => {
     navigator.clipboard.writeText(textToCopy);
@@ -49,56 +75,58 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // NFC Write Handler — Integrates with nfc_v01 Studio App & Native Web NFC
+  // NFC Write Handler — Integrates with Vercel Web NFC & local nfc_v01 Arduino App
   const handleNFCStudioWrite = async () => {
-    const nfcStudioAppUrl = `http://localhost:3001/?url=${encodeURIComponent(portalUrl)}&autowrite=true`;
+    setNfcStatus('📡 A preparar gravação do cartão NFC...');
 
-    // Open window synchronously during user click event (prevents popup blocker)
-    window.open(nfcStudioAppUrl, '_blank');
-
-    setNfcStatus('📡 A iniciar gravação NFC na aplicação nfc_v01...');
-
-    // 1. Send URL payload to local nfc_v01 server (http://localhost:3001)
-    try {
-      const res = await fetch('http://localhost:3001/api/update-ino', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payload: portalUrl, type: 'URL' }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setNfcStatus(`✅ URL do cliente inserido na aplicação nfc_v01! A compilar e gravar no cartão NFC via Arduino (COM4)...`);
-        // Trigger compile & upload on Arduino
-        fetch('http://localhost:3001/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        }).then(r => r.json()).then(uploadData => {
-          if (uploadData.success) {
-            setNfcStatus(`👉 CÓDIGO CARREGADO NO ARDUINO! Agora ENCOSTE FISICAMENTE o seu cartão NTAG215 ao leitor PN532 para gravar a URL (${portalUrl})!`);
-          } else {
-            setNfcStatus(`⚠️ nfc_v01: ${uploadData.error || 'Aguardando toque no leitor PN532'}`);
-          }
-        }).catch(() => {});
-      } else {
-        setNfcStatus(`⚠️ Erro nfc_v01: ${data.error}`);
-      }
-    } catch (err: any) {
-      setNfcStatus(`📡 A abrir aplicação nfc_v01 no navegador...`);
-    }
-
-    // 2. Also write natively if Web NFC NDEFReader is available in browser
-    if ('NDEFReader' in window) {
+    // 1. First attempt Web NFC API (Native on Android Chrome / HTTPS / Vercel)
+    let webNfcSuccess = false;
+    if (typeof window !== 'undefined' && 'NDEFReader' in window) {
       try {
         // @ts-ignore Web NFC API
         const ndef = new NDEFReader();
         await ndef.write({
           records: [{ recordType: 'url', data: portalUrl }]
         });
-        setNfcStatus('✅ Cartão NFC gravado com sucesso via Web NFC Native!');
+        webNfcSuccess = true;
+        setNfcStatus(`✅ Cartão NFC gravado com sucesso via Web NFC com a URL do Vercel:\n${portalUrl}`);
+        return;
       } catch (err: any) {
-        // Handled silently
+        setNfcStatus(`👉 Por favor, encoste o cartão NFC NTAG215 à traseira do telemóvel...`);
       }
+    }
+
+    // 2. Try communicating with local nfc_v01 Arduino server (http://localhost:3001)
+    const nfcStudioServer = (settings.get().nfcStudioUrl || 'http://localhost:3001').replace(/\/$/, '');
+    try {
+      setNfcStatus(`📡 A ligar à aplicação local Arduino (${nfcStudioServer})...`);
+      const res = await fetch(`${nfcStudioServer}/api/update-ino`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payload: portalUrl, type: 'URL' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Open nfc_v01 tab only if local server responded
+        window.open(`${nfcStudioServer}/?url=${encodeURIComponent(portalUrl)}&autowrite=true`, '_blank');
+        setNfcStatus(`✅ URL do Vercel inserida na aplicação Arduino (${portalUrl})! A compilar sketch C++ no leitor PN532...`);
+        fetch(`${nfcStudioServer}/api/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }).then(r => r.json()).then(uploadData => {
+          if (uploadData.success) {
+            setNfcStatus(`👉 CÓDIGO ENVIADO PARA O ARDUINO! Encoste o seu cartão NTAG215 ao leitor PN532 para gravar a URL do Vercel (${portalUrl})!`);
+          } else {
+            setNfcStatus(`⚠️ nfc_v01: ${uploadData.error || 'Aguardando toque no leitor PN532'}`);
+          }
+        }).catch(() => { });
+      } else {
+        setNfcStatus(`⚠️ Resposta do nfc_v01: ${data.error}`);
+      }
+    } catch (err: any) {
+      // Local server not running or blocked by HTTPS mixed content on Vercel
+      setNfcStatus(`ℹ️ URL do Vercel pronta a gravar: ${portalUrl}\n\n⚠️ Servidor Arduino local (http://localhost:3001) não está ativo nesta máquina. Para gravar no leitor físico PN532, abra a aplicação nfc_v01 no seu computador ou copie o sketch C++ no separador "Código Arduino".`);
     }
   };
 
@@ -125,9 +153,8 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-[var(--foreground)]">{customer.name}</h1>
                 {customer.tags.map(tag => (
-                  <span key={tag} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                    tag === 'VIP' ? 'bg-amber-500/15 text-amber-400' : 'bg-blue-500/15 text-blue-400'
-                  }`}>{tag}</span>
+                  <span key={tag} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${tag === 'VIP' ? 'bg-amber-500/15 text-amber-400' : 'bg-blue-500/15 text-blue-400'
+                    }`}>{tag}</span>
                 ))}
               </div>
               <div className="flex flex-wrap gap-4 mt-2 text-sm text-[var(--muted)]">
@@ -252,11 +279,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           <div className="grid grid-cols-3 gap-2 p-1.5 rounded-2xl bg-neutral-950 border border-neutral-800">
             <button
               onClick={() => setModalTab('qr')}
-              className={`py-2.5 px-3 rounded-xl text-xs font-black tracking-wide flex items-center justify-center gap-2 transition-all duration-200 ${
-                modalTab === 'qr'
+              className={`py-2.5 px-3 rounded-xl text-xs font-black tracking-wide flex items-center justify-center gap-2 transition-all duration-200 ${modalTab === 'qr'
                   ? 'bg-gradient-to-r from-white via-neutral-200 to-neutral-300 text-black border border-white shadow-md font-montserrat scale-[1.02]'
                   : 'text-neutral-400 hover:text-white hover:bg-neutral-900 border border-transparent'
-              }`}
+                }`}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -269,11 +295,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
             <button
               onClick={() => setModalTab('nfc')}
-              className={`py-2.5 px-3 rounded-xl text-xs font-black tracking-wide flex items-center justify-center gap-2 transition-all duration-200 ${
-                modalTab === 'nfc'
+              className={`py-2.5 px-3 rounded-xl text-xs font-black tracking-wide flex items-center justify-center gap-2 transition-all duration-200 ${modalTab === 'nfc'
                   ? 'bg-gradient-to-r from-white via-neutral-200 to-neutral-300 text-black border border-white shadow-md font-montserrat scale-[1.02]'
                   : 'text-neutral-400 hover:text-white hover:bg-neutral-900 border border-transparent'
-              }`}
+                }`}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36" />
@@ -286,11 +311,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
             <button
               onClick={() => setModalTab('arduino')}
-              className={`py-2.5 px-3 rounded-xl text-xs font-black tracking-wide flex items-center justify-center gap-2 transition-all duration-200 ${
-                modalTab === 'arduino'
+              className={`py-2.5 px-3 rounded-xl text-xs font-black tracking-wide flex items-center justify-center gap-2 transition-all duration-200 ${modalTab === 'arduino'
                   ? 'bg-gradient-to-r from-white via-neutral-200 to-neutral-300 text-black border border-white shadow-md font-montserrat scale-[1.02]'
                   : 'text-neutral-400 hover:text-white hover:bg-neutral-900 border border-transparent'
-              }`}
+                }`}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="4" y="4" width="16" height="16" rx="2" />
