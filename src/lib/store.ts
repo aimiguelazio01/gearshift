@@ -27,8 +27,14 @@ export const settings = {
     if (raw) {
       try {
         const p = JSON.parse(raw);
+        let baseUrl = p.publicBaseUrl || 'https://gearshift1.vercel.app';
+        // Auto-migrate old domain name
+        if (baseUrl.includes('gearshift-one')) {
+          baseUrl = baseUrl.replace('gearshift-one', 'gearshift1');
+          localStorage.setItem(KEYS.settings, JSON.stringify({ ...p, publicBaseUrl: baseUrl }));
+        }
         return {
-          publicBaseUrl: p.publicBaseUrl || 'https://gearshift1.vercel.app',
+          publicBaseUrl: baseUrl,
           nfcStudioUrl: p.nfcStudioUrl || 'http://localhost:3001',
         };
       } catch {}

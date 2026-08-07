@@ -76,18 +76,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   };
 
   // NFC Write Handler — Integrates with Vercel Web NFC & local nfc_v01 Arduino App
+  const nfcStudioServer = (settings.get().nfcStudioUrl || 'http://localhost:3001').replace(/\/$/, '');
+  const nfcStudioAppUrl = `${nfcStudioServer}/?url=${encodeURIComponent(portalUrl)}&autowrite=true`;
+
   const handleNFCStudioWrite = async () => {
-    const nfcStudioServer = (settings.get().nfcStudioUrl || 'http://localhost:3001').replace(/\/$/, '');
-    const nfcStudioAppUrl = `${nfcStudioServer}/?url=${encodeURIComponent(portalUrl)}&autowrite=true`;
-
-    // 1. Open local NFC Card Writer Studio app in new window immediately during click event
-    try {
-      window.open(nfcStudioAppUrl, '_blank');
-    } catch (e) {}
-
-    setNfcStatus(`📡 A abrir aplicação NFC Studio (${nfcStudioServer}) com a URL do cliente (${portalUrl})...`);
-
-    // 2. Native Web NFC API (Android Chrome / HTTPS / Vercel)
+    // 1. Native Web NFC API (Android Chrome / HTTPS / Vercel)
     if (typeof window !== 'undefined' && 'NDEFReader' in window) {
       try {
         // @ts-ignore Web NFC API
@@ -98,11 +91,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         setNfcStatus(`✅ Cartão NFC gravado com sucesso via Web NFC Native:\n${portalUrl}`);
         return;
       } catch (err: any) {
-        // Handled gracefully
+        // Handled gracefully — device may not support Web NFC
       }
     }
 
-    // 3. Send payload to local nfc_v01 server background API if reachable
+    // 2. Try reaching local nfc_v01 server via API (only works from localhost, not HTTPS)
     try {
       const res = await fetch(`${nfcStudioServer}/api/update-ino`, {
         method: 'POST',
@@ -121,11 +114,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             setNfcStatus(`👉 CÓDIGO CARREGADO NO ARDUINO! Encoste o seu cartão NTAG215 ao leitor PN532 para gravar a URL (${portalUrl})!`);
           }
         }).catch(() => { });
+        return;
       }
     } catch (err: any) {
-      // Browsers on HTTPS block HTTP fetches, but window.open above successfully opened http://localhost:3001 with autowrite=true!
-      setNfcStatus(`👉 A aplicação NFC Studio abriu em http://localhost:3001 com a URL (${portalUrl}). Encoste o seu cartão NTAG215 ao leitor PN532 para gravar!`);
+      // HTTPS→HTTP fetch blocked by browser — expected when on Vercel
     }
+
+    // 3. Fallback: show info message + the clickable <a> link below handles actual navigation
+    setNfcStatus(`ℹ️ URL do Vercel pronta a gravar: ${portalUrl}\n\n⚠️ Servidor Arduino local (${nfcStudioServer}) não está acessível via API a partir desta página HTTPS.\n\n👉 Clique no botão "🔗 Abrir NFC Studio" abaixo para abrir a aplicação no seu computador.`);
   };
 
   const qrCodeImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(portalUrl)}`;
@@ -376,28 +372,34 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   </p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                  <button
-                    onClick={handleNFCStudioWrite}
-                    className="btn-primary text-xs py-3 px-5 font-black shadow-xl active:scale-95 transition-all duration-200 inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500"
+                <div className="flex flex-col items-center justify-center gap-3 pt-2">
+                  {/* PRIMARY ACTION: Direct <a> link — ALWAYS works from HTTPS → HTTP */}
+                  <a
+                    href={nfcStudioAppUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary w-full text-xs py-3.5 px-6 font-black shadow-xl active:scale-95 transition-all duration-200 inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl no-underline text-white"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36" />
                       <path d="M9.46 9.88a4 4 0 0 1 0 4.24" />
                       <rect x="2" y="2" width="20" height="20" rx="5" />
                     </svg>
-                    <span>Encostar e Gravar Cartão NFC</span>
-                  </button>
-
-                  <a
-                    href={`http://localhost:3001/?url=${encodeURIComponent(portalUrl)}&autowrite=true`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-secondary text-xs py-3 px-5 font-bold shadow-md active:scale-95 transition-all inline-flex items-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 rounded-xl"
-                  >
-                    <span>🔗 Abrir Aplicação NFC Studio (localhost:3001)</span>
-                    <span>↗</span>
+                    <span>🔗 Abrir NFC Studio &amp; Gravar Cartão (localhost:3001)</span>
                   </a>
+
+                  {/* SECONDARY: Web NFC / local API fallback */}
+                  <button
+                    onClick={handleNFCStudioWrite}
+                    className="btn-secondary text-[11px] py-2 px-4 font-semibold shadow-md active:scale-95 transition-all inline-flex items-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-600 rounded-lg"
+                  >
+                    <span>📡 Tentar Web NFC / API Local</span>
+                  </button>
+                </div>
+
+                {/* Show the exact URL being written */}
+                <div className="p-2.5 rounded-lg bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-400 font-mono truncate text-center mt-2">
+                  {portalUrl}
                 </div>
               </div>
 
@@ -405,12 +407,12 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 <div className="p-3.5 rounded-xl bg-neutral-900 border border-neutral-700 text-xs text-left text-neutral-200 font-mono font-semibold space-y-2">
                   <p className="whitespace-pre-wrap">{nfcStatus}</p>
                   <a
-                    href={`http://localhost:3001/?url=${encodeURIComponent(portalUrl)}&autowrite=true`}
+                    href={nfcStudioAppUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="btn-secondary text-[11px] py-1.5 px-3 inline-flex items-center gap-1 bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 rounded-lg"
+                    className="btn-secondary text-[11px] py-1.5 px-3 inline-flex items-center gap-1 bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 rounded-lg no-underline"
                   >
-                    <span>🔗 Abrir NFC Card Writer Studio (`http://localhost:3001`)</span>
+                    <span>🔗 Abrir NFC Studio (localhost:3001)</span>
                     <span>↗</span>
                   </a>
                 </div>
