@@ -29,11 +29,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   useEffect(() => {
     const saved = settings.get();
-    if (saved.publicBaseUrl) {
+    if (saved.publicBaseUrl && !saved.publicBaseUrl.includes('gearshift-one.vercel.app')) {
       setPublicBaseUrl(saved.publicBaseUrl);
     } else if (typeof window !== 'undefined') {
       const origin = window.location.origin;
-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('gearshift-one')) {
         setPublicBaseUrl('https://gearshift1.vercel.app');
       } else {
         setPublicBaseUrl(origin);
@@ -376,29 +376,41 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   </p>
                 </div>
 
-                <button
-                  onClick={handleNFCStudioWrite}
-                  className="btn-primary text-xs py-3 px-6 font-black shadow-xl active:scale-95 transition-all duration-200 inline-flex items-center gap-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36" />
-                    <path d="M9.46 9.88a4 4 0 0 1 0 4.24" />
-                    <rect x="2" y="2" width="20" height="20" rx="5" />
-                  </svg>
-                  <span>Encostar e Gravar Cartão NFC (via nfc_v01)</span>
-                </button>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                  <button
+                    onClick={handleNFCStudioWrite}
+                    className="btn-primary text-xs py-3 px-5 font-black shadow-xl active:scale-95 transition-all duration-200 inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36" />
+                      <path d="M9.46 9.88a4 4 0 0 1 0 4.24" />
+                      <rect x="2" y="2" width="20" height="20" rx="5" />
+                    </svg>
+                    <span>Encostar e Gravar Cartão NFC</span>
+                  </button>
+
+                  <a
+                    href={`http://localhost:3001/?url=${encodeURIComponent(portalUrl)}&autowrite=true`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-secondary text-xs py-3 px-5 font-bold shadow-md active:scale-95 transition-all inline-flex items-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 rounded-xl"
+                  >
+                    <span>🔗 Abrir Aplicação NFC Studio (localhost:3001)</span>
+                    <span>↗</span>
+                  </a>
+                </div>
               </div>
 
               {nfcStatus && (
                 <div className="p-3.5 rounded-xl bg-neutral-900 border border-neutral-700 text-xs text-left text-neutral-200 font-mono font-semibold space-y-2">
-                  <p>{nfcStatus}</p>
+                  <p className="whitespace-pre-wrap">{nfcStatus}</p>
                   <a
                     href={`http://localhost:3001/?url=${encodeURIComponent(portalUrl)}&autowrite=true`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-secondary text-[11px] py-1.5 px-3 inline-flex items-center gap-1 bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 rounded-lg"
                   >
-                    <span>🔗 Abrir NFC Card Writer Studio (`nfc_v01`)</span>
+                    <span>🔗 Abrir NFC Card Writer Studio (`http://localhost:3001`)</span>
                     <span>↗</span>
                   </a>
                 </div>
