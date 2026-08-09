@@ -228,24 +228,53 @@ class NFCStudioHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(500, {"error": str(e)})
 
     def _handle_upload(self):
-        """Compile and upload the sketch to the Arduino board via MCP server."""
+        """Compile and upload the sketch to the Arduino board via arduino-cli or MCP."""
         try:
-            print(f"[MCP] Compile+Upload: fqbn={BOARD_FQBN}, port={BOARD_PORT}, sketch={INO_DIR}")
-            result = mcp_client.compile_and_upload(BOARD_FQBN, BOARD_PORT, INO_DIR)
+            cli_bin = r"C:\Program Files\Arduino CLI\arduino-cli.exe"
+            print(f"[Arduino CLI] Compiling and uploading: fqbn={BOARD_FQBN}, port={BOARD_PORT}, sketch={INO_DIR}")
 
-            if result["success"]:
+            if os.path.exists(cli_bin):
+                # Direct fast execution via arduino-cli
+                cmd_compile = [cli_bin, "compile", "--fqbn", BOARD_FQBN, INO_DIR]
+                res_c = subprocess.run(cmd_compile, capture_output=True, text=True, timeout=40)
+                if res_c.returncode != 0:
+                    self._send_json(200, {
+                        "success": False,
+                        "stage": "compile_error",
+                        "error": res_c.stderr or res_c.stdout
+                    })
+                    return
+
+                cmd_upload = [cli_bin, "upload", "-p", BOARD_PORT, "--fqbn", BOARD_FQBN, INO_DIR]
+                res_u = subprocess.run(cmd_upload, capture_output=True, text=True, timeout=40)
+                if res_u.returncode != 0:
+                    self._send_json(200, {
+                        "success": False,
+                        "stage": "upload_error",
+                        "error": res_u.stderr or res_u.stdout
+                    })
+                    return
+
                 self._send_json(200, {
                     "success": True,
                     "stage": "complete",
                     "message": "Sketch compiled and uploaded successfully!"
                 })
             else:
-                self._send_json(200, {
-                    "success": False,
-                    "stage": "mcp_error",
-                    "error": result.get("error", "Unknown MCP error"),
-                    "output": str(result)
-                })
+                result = mcp_client.compile_and_upload(BOARD_FQBN, BOARD_PORT, INO_DIR)
+                if result["success"]:
+                    self._send_json(200, {
+                        "success": True,
+                        "stage": "complete",
+                        "message": "Sketch compiled and uploaded successfully!"
+                    })
+                else:
+                    self._send_json(200, {
+                        "success": False,
+                        "stage": "mcp_error",
+                        "error": result.get("error", "Unknown MCP error"),
+                        "output": str(result)
+                    })
 
         except Exception as e:
             self._send_json(500, {"error": str(e)})

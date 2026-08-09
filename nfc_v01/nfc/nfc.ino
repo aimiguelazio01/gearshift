@@ -7,7 +7,7 @@
 Adafruit_PN532 nfc(PN532_IRQ, PN532_RESET);
 
 // State variables
-String pendingPayload = "https://gearshift-one.vercel.app/portal/miguelalmeida";
+String pendingPayload = "https://gearshift-one.vercel.app/portal/empresaabcsa";
 String pendingType = "URL"; // "URL" or "TEXT"
 bool hasPendingWrite = true;
 bool autoReadOnTap = false;
@@ -16,22 +16,25 @@ void setup(void) {
   Serial.begin(115200);
   while (!Serial && millis() < 3000);
 
-  Serial.println("STATUS:INIT");
   nfc.begin();
 
-  uint32_t versiondata = nfc.getFirmwareVersion();
+  uint32_t versiondata = 0;
+  for (int i = 0; i < 5; i++) {
+    versiondata = nfc.getFirmwareVersion();
+    if (versiondata) break;
+    delay(200);
+  }
+
   if (!versiondata) {
     Serial.println("ERROR:PN532_NOT_FOUND");
-    while (1) {
-      delay(1000);
-    }
+    Serial.println("INFO:PN532 not detected. Check I2C switches (1=ON, 2=OFF) and SDA/SCL pins.");
+  } else {
+    nfc.SAMConfig();
+    Serial.println("STATUS:READY");
+    Serial.println("Initializing PN532 for NTAG215...");
+    Serial.println("Place your NTAG215 card to update...");
+    Serial.println("INFO:Pending Payload=" + pendingPayload);
   }
-  
-  nfc.SAMConfig();
-  Serial.println("STATUS:READY");
-  Serial.println("Initializing PN532 for NTAG215...");
-  Serial.println("Place your NTAG215 card to update...");
-  Serial.println("INFO:Pending Payload=" + pendingPayload);
 }
 
 void parseSerialCommand(String cmd) {
