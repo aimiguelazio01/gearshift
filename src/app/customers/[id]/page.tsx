@@ -423,28 +423,27 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 </div>
 
                 <div className="flex flex-col items-center justify-center gap-3 pt-2">
-                  {/* PRIMARY ACTION: Direct <a> link — ALWAYS works from HTTPS → HTTP */}
+                  {/* PRIMARY ACTION: Direct Web Serial USB connection in browser */}
+                  <button
+                    onClick={handleNFCStudioWrite}
+                    className="btn-primary w-full text-xs py-3.5 px-6 font-black shadow-xl active:scale-95 transition-all duration-200 inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl text-white cursor-pointer"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2v6m0 0l-3-3m3 3l3-3M6 12a6 6 0 1012 0 6 6 0 00-12 0z"/>
+                    </svg>
+                    <span>⚡ Conectar Arduino USB &amp; Gravar Cartão</span>
+                  </button>
+
+                  {/* SECONDARY ACTION: Open standalone NFC Studio on port 3001 */}
                   <a
                     href={nfcStudioAppUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="btn-primary w-full text-xs py-3.5 px-6 font-black shadow-xl active:scale-95 transition-all duration-200 inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl no-underline text-white"
+                    className="btn-secondary w-full text-[11px] py-2.5 px-4 font-semibold shadow-md active:scale-95 transition-all inline-flex items-center justify-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-600 rounded-lg no-underline"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36" />
-                      <path d="M9.46 9.88a4 4 0 0 1 0 4.24" />
-                      <rect x="2" y="2" width="20" height="20" rx="5" />
-                    </svg>
-                    <span>🔗 Abrir NFC Studio &amp; Gravar Cartão (localhost:3001)</span>
+                    <span>🔗 Abrir NFC Studio Studio Local (localhost:3001)</span>
+                    <span>↗</span>
                   </a>
-
-                  {/* SECONDARY: Web NFC / local API fallback */}
-                  <button
-                    onClick={handleNFCStudioWrite}
-                    className="btn-secondary text-[11px] py-2 px-4 font-semibold shadow-md active:scale-95 transition-all inline-flex items-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-600 rounded-lg"
-                  >
-                    <span>📡 Tentar Web NFC / API Local</span>
-                  </button>
                 </div>
 
                 {/* Show the exact URL being written */}
