@@ -75,12 +75,63 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // NFC Write Handler — Integrates with Vercel Web NFC & local nfc_v01 Arduino App
+  // NFC Write Handler — Integrates direct Web Serial (Vercel HTTPS), Native Web NFC & local nfc_v01 Studio
   const nfcStudioServer = (settings.get().nfcStudioUrl || 'http://localhost:3001').replace(/\/$/, '');
   const nfcStudioAppUrl = `${nfcStudioServer}/?url=${encodeURIComponent(portalUrl)}&autowrite=true`;
 
   const handleNFCStudioWrite = async () => {
-    // 1. Native Web NFC API (Android Chrome / HTTPS / Vercel)
+    setNfcStatus(null);
+
+    // 1. Web Serial API (Chrome/Edge over HTTPS on Vercel or Localhost)
+    if (typeof window !== 'undefined' && 'serial' in navigator) {
+      try {
+        setNfcStatus('🔌 Selecione a porta USB (COM4) na janela do navegador...');
+        // @ts-ignore Web Serial API
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+
+        setNfcStatus(`📲 Conectado à porta USB!\nA enviar URL: ${portalUrl}\n\n👉 ENCOSTE O CARTÃO NTAG215 no leitor PN532 agora!`);
+
+        const encoder = new TextEncoder();
+        const writer = port.writable.getWriter();
+        await writer.write(encoder.encode(`WRITE:URL:${portalUrl}\n`));
+        writer.releaseLock();
+
+        // Listen for serial response asynchronously
+        const textDecoder = new TextDecoderStream();
+        port.readable.pipeTo(textDecoder.writable);
+        const reader = textDecoder.readable.getReader();
+
+        let buffer = '';
+        const timeout = setTimeout(async () => {
+          try { await reader.cancel(); } catch {}
+          try { await port.close(); } catch {}
+          setNfcStatus(`✅ Comando enviado para o Arduino!\nURL: ${portalUrl}\n\nEncoste o seu cartão NTAG215 no leitor PN532.`);
+        }, 8000);
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          if (buffer.includes('SUCCESS:WRITTEN') || buffer.includes('is fully updated') || buffer.includes('OK:SET_URL')) {
+            setNfcStatus(`✅ CARTÃO NFC GRAVADO COM SUCESSO!\nURL: ${portalUrl}`);
+            clearTimeout(timeout);
+            try { await reader.cancel(); } catch {}
+            try { await port.close(); } catch {}
+            break;
+          }
+        }
+        return;
+      } catch (err: any) {
+        if (err.name === 'NotFoundError') {
+          setNfcStatus('ℹ️ Seleção de porta USB cancelada.');
+          return;
+        }
+        // Fallback to next methods if Web Serial fails
+      }
+    }
+
+    // 2. Native Web NFC API (Android Chrome)
     if (typeof window !== 'undefined' && 'NDEFReader' in window) {
       try {
         // @ts-ignore Web NFC API
@@ -88,14 +139,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         await ndef.write({
           records: [{ recordType: 'url', data: portalUrl }]
         });
-        setNfcStatus(`✅ Cartão NFC gravado com sucesso via Web NFC Native:\n${portalUrl}`);
+        setNfcStatus(`✅ Cartão NFC gravado com sucesso via Web NFC:\n${portalUrl}`);
         return;
       } catch (err: any) {
-        // Handled gracefully — device may not support Web NFC
+        // Handled gracefully
       }
     }
 
-    // 2. Try reaching local nfc_v01 server via API (only works from localhost, not HTTPS)
+    // 3. Try reaching local nfc_v01 server via API (if on localhost)
     try {
       const res = await fetch(`${nfcStudioServer}/api/update-ino`, {
         method: 'POST',
@@ -104,14 +155,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       });
       const data = await res.json();
       if (data.success) {
-        setNfcStatus(`✅ URL do cliente inserida no leitor PN532 (${portalUrl})! A compilar sketch Arduino...`);
+        setNfcStatus(`✅ URL enviada para o leitor PN532 (${portalUrl})! A compilar sketch Arduino...`);
         fetch(`${nfcStudioServer}/api/upload`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         }).then(r => r.json()).then(uploadData => {
           if (uploadData.success) {
-            setNfcStatus(`👉 CÓDIGO CARREGADO NO ARDUINO! Encoste o seu cartão NTAG215 ao leitor PN532 para gravar a URL (${portalUrl})!`);
+            setNfcStatus(`👉 CÓDIGO CARREGADO NO ARDUINO! Encoste o seu cartão NTAG215 ao leitor PN532!`);
           }
         }).catch(() => { });
         return;
@@ -120,8 +171,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       // HTTPS→HTTP fetch blocked by browser — expected when on Vercel
     }
 
-    // 3. Fallback: show info message + the clickable <a> link below handles actual navigation
-    setNfcStatus(`ℹ️ URL do Vercel pronta a gravar: ${portalUrl}\n\n⚠️ Servidor Arduino local (${nfcStudioServer}) não está acessível via API a partir desta página HTTPS.\n\n👉 Clique no botão "🔗 Abrir NFC Studio" abaixo para abrir a aplicação no seu computador.`);
+    setNfcStatus(`ℹ️ URL pronta a gravar: ${portalUrl}\n\n👉 Se o pop-up de porta USB não abriu, clique no botão "🔗 Abrir NFC Studio Local" abaixo.`);
   };
 
   const qrCodeImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(portalUrl)}`;
