@@ -7,7 +7,7 @@
 Adafruit_PN532 nfc(PN532_IRQ, PN532_RESET);
 
 // State variables
-String pendingPayload = "http://localhost:3000/portal/translogislda";
+String pendingPayload = "https://gearshift-one.vercel.app/portal/miguelalmeida";
 String pendingType = "URL"; // "URL" or "TEXT"
 bool hasPendingWrite = true;
 bool autoReadOnTap = false;
