@@ -45,7 +45,8 @@ void loop(void) {
     Serial.println("NTAG215 Card Found! Writing NDEF URI Portal URL...");
 
     // Step 1: Initialize NTAG215 Capability Container (Page 3) for NDEF compatibility
-    uint8_t ccPage[4] = { 0xE1, 0x10, 0x6D, 0x00 };
+    // NTAG215: 504 bytes of user memory (0x3E capacity in the CC).
+    uint8_t ccPage[4] = { 0xE1, 0x10, 0x3E, 0x00 };
     nfc.ntag2xx_WritePage(3, ccPage);
 
     // Step 2: Build NDEF URI Record (https://)

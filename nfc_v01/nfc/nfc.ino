@@ -7,7 +7,7 @@
 Adafruit_PN532 nfc(PN532_IRQ, PN532_RESET);
 
 // State variables
-String pendingPayload = "https://gearshift-one.vercel.app/portal/empresaabcsa";
+String pendingPayload = "https://gearshift2.vercel.app/portal/sofiamendes";
 String pendingType = "URL"; // "URL" or "TEXT"
 bool hasPendingWrite = true;
 bool autoReadOnTap = false;
@@ -134,7 +134,8 @@ bool writeNtag215Payload(String data, String type) {
   }
 
   // Ensure NTAG215 Capability Container (Page 3) is initialized for NDEF compatibility
-  uint8_t ccPage[4] = { 0xE1, 0x10, 0x6D, 0x00 };
+  // NTAG215: 504 bytes of user memory (0x3E capacity in the CC).
+  uint8_t ccPage[4] = { 0xE1, 0x10, 0x3E, 0x00 };
   nfc.ntag2xx_WritePage(3, ccPage);
 
   // Calculate pages required for NDEF payload starting at Page 4
