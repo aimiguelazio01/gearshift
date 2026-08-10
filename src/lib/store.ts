@@ -22,15 +22,15 @@ const KEYS = {
 
 export const settings = {
   get: (): WorkshopSettings => {
-    if (typeof window === 'undefined') return { publicBaseUrl: 'https://gearshift1.vercel.app', nfcStudioUrl: 'http://localhost:3001' };
+    if (typeof window === 'undefined') return { publicBaseUrl: 'https://gearshift2.vercel.app', nfcStudioUrl: 'http://localhost:3001' };
     const raw = localStorage.getItem(KEYS.settings);
     if (raw) {
       try {
         const p = JSON.parse(raw);
-        let baseUrl = p.publicBaseUrl || 'https://gearshift1.vercel.app';
-        // Auto-migrate old domain name
-        if (baseUrl.includes('gearshift-one')) {
-          baseUrl = baseUrl.replace('gearshift-one', 'gearshift1');
+        let baseUrl = p.publicBaseUrl || 'https://gearshift2.vercel.app';
+        // Auto-migrate previous Vercel deployment domains.
+        if (/gearshift(?:-one|1)\.vercel\.app/.test(baseUrl)) {
+          baseUrl = baseUrl.replace(/gearshift(?:-one|1)\.vercel\.app/, 'gearshift2.vercel.app');
           localStorage.setItem(KEYS.settings, JSON.stringify({ ...p, publicBaseUrl: baseUrl }));
         }
         return {
@@ -39,7 +39,7 @@ export const settings = {
         };
       } catch {}
     }
-    return { publicBaseUrl: 'https://gearshift1.vercel.app', nfcStudioUrl: 'http://localhost:3001' };
+    return { publicBaseUrl: 'https://gearshift2.vercel.app', nfcStudioUrl: 'http://localhost:3001' };
   },
   update: (newSettings: Partial<WorkshopSettings>): WorkshopSettings => {
     const current = settings.get();

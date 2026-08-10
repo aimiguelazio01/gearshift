@@ -29,14 +29,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   useEffect(() => {
     const saved = settings.get();
-    const savedBaseUrl = saved.publicBaseUrl.replace('gearshift-one.vercel.app', 'gearshift1.vercel.app');
+    const savedBaseUrl = saved.publicBaseUrl.replace(/gearshift(?:-one|1)\.vercel\.app/, 'gearshift2.vercel.app');
     if (savedBaseUrl) {
       setPublicBaseUrl(savedBaseUrl);
       if (savedBaseUrl !== saved.publicBaseUrl) settings.update({ publicBaseUrl: savedBaseUrl });
     } else if (typeof window !== 'undefined') {
       const origin = window.location.origin;
       if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('gearshift-one')) {
-        setPublicBaseUrl('https://gearshift1.vercel.app');
+        setPublicBaseUrl('https://gearshift2.vercel.app');
       } else {
         setPublicBaseUrl(origin);
       }
@@ -45,7 +45,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   const handleSaveDomain = () => {
     if (publicBaseUrl) {
-      const normalizedUrl = publicBaseUrl.replace('gearshift-one.vercel.app', 'gearshift1.vercel.app');
+      const normalizedUrl = publicBaseUrl.replace(/gearshift(?:-one|1)\.vercel\.app/, 'gearshift2.vercel.app');
       settings.update({ publicBaseUrl: normalizedUrl });
       setPublicBaseUrl(normalizedUrl);
       setDomainSaved(true);
