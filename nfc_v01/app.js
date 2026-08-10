@@ -199,7 +199,7 @@ function setType(type) {
     if (tabUrl) tabUrl.classList.add('active');
     if (tabText) tabText.classList.remove('active');
     if (fieldDesc) fieldDesc.innerText = 'Endereço Web (URL) da App do Cliente';
-    if (payloadInput) payloadInput.placeholder = 'http://localhost:3000/portal/nomecliente';
+    if (payloadInput) payloadInput.placeholder = 'https://gearshift2.vercel.app/portal/nomecliente';
   } else {
     if (tabText) tabText.classList.add('active');
     if (tabUrl) tabUrl.classList.remove('active');
@@ -509,6 +509,16 @@ function handleWriteCommand() {
   // Auto-prepend https:// for URL type if no scheme is present
   if (activeType === 'URL' && !data.match(/^https?:\/\//i)) {
     data = 'https://' + data;
+    payloadInput.value = data;
+    updateVisualizer();
+  }
+
+  // NFC cards must contain a public customer portal URL. Prevent the old
+  // localhost defaults (or previous Vercel domains) from being written.
+  if (activeType === 'URL') {
+    data = data
+      .replace(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?/i, 'https://gearshift2.vercel.app')
+      .replace(/gearshift(?:-one|1)\.vercel\.app/i, 'gearshift2.vercel.app');
     payloadInput.value = data;
     updateVisualizer();
   }
