@@ -2,6 +2,8 @@
  * AutoWorkshop — Arduino PN532 NFC Writer for NTAG215 Cards
  * 
  * Writes the Client App Portal URL directly to an NTAG215 card.
+ * Formats the card as NDEF URI (https://) so smartphones (Android/iOS)
+ * automatically open the web URL when tapped.
  * Compatible with PN532 module (I2C) and Adafruit_PN532 library.
  */
 
@@ -12,6 +14,9 @@
 #define PN532_RESET (3)
 
 Adafruit_PN532 nfc(PN532_IRQ, PN532_RESET);
+
+// Target URL to write (without https:// prefix, as https:// is encoded as prefix code 0x04)
+const char targetDomain[] = "gearshift2.vercel.app/portal/empresaabcsa";
 
 void setup(void) {
   Serial.begin(115200);
@@ -37,31 +42,48 @@ void loop(void) {
   success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
   
   if (success) {
-    Serial.println("NTAG215 Card Found! Writing Client Portal URL...");
+    Serial.println("NTAG215 Card Found! Writing NDEF URI Portal URL...");
 
-    // ── Target: http://localhost:3000/portal/c1 (27 bytes payload) ──
-    // Page 4: 0x03 (NDEF Tag), 0x1A (TLV length: 26 bytes), 0xD1 (Header), 0x01 (Type Len 'U')
-    uint8_t page4[]  = { 0x03, 0x1A, 0xD1, 0x01 }; // . . . .
-    uint8_t page5[]  = { 0x17, 0x55, 0x03, 'l'  }; // . U . l  (0x03 = http://)
-    uint8_t page6[]  = { 'o',  'c',  'a',  'l'  }; // o c a l
-    uint8_t page7[]  = { 'h',  'o',  's',  't'  }; // h o s t
-    uint8_t page8[]  = { ':',  '3',  '0',  '0'  }; // : 3 0 0
-    uint8_t page9[]  = { '0',  '/',  'p',  'o'  }; // 0 / p o
-    uint8_t page10[] = { 'r',  't',  'a',  'l'  }; // r t a l
-    uint8_t page11[] = { '/',  'c',  '1',  0xFE }; // / c 1 . (0xFE = NDEF Terminator)
+    // Step 1: Initialize NTAG215 Capability Container (Page 3) for NDEF compatibility
+    uint8_t ccPage[4] = { 0xE1, 0x10, 0x6D, 0x00 };
+    nfc.ntag2xx_WritePage(3, ccPage);
 
-    // Write NDEF pages sequentially
-    nfc.ntag2xx_WritePage(4, page4);
-    nfc.ntag2xx_WritePage(5, page5);
-    nfc.ntag2xx_WritePage(6, page6);
-    nfc.ntag2xx_WritePage(7, page7);
-    nfc.ntag2xx_WritePage(8, page8);
-    nfc.ntag2xx_WritePage(9, page9);
-    nfc.ntag2xx_WritePage(10, page10);
-    nfc.ntag2xx_WritePage(11, page11);
+    // Step 2: Build NDEF URI Record (https://)
+    uint8_t domainLen = strlen(targetDomain);
+    uint8_t recordPayloadLen = 1 + domainLen; // 0x04 (https://) + domain string
+    uint8_t ndefMsgLen = 4 + recordPayloadLen; // 0xD1, 0x01, recordPayloadLen, 0x55 ('U')
 
-    Serial.println("SUCCESS! Client App link written onto NFC Card.");
-    Serial.println("URL: http://localhost:3000/portal/c1");
+    uint8_t payloadBytes[128];
+    uint16_t idx = 0;
+
+    payloadBytes[idx++] = 0x03;             // NDEF TLV Tag
+    payloadBytes[idx++] = ndefMsgLen;       // TLV Length
+    payloadBytes[idx++] = 0xD1;             // NDEF Header (MB=1, ME=1, SR=1, TNF=1)
+    payloadBytes[idx++] = 0x01;             // Record Type Length ('U')
+    payloadBytes[idx++] = recordPayloadLen; // Record Payload Length
+    payloadBytes[idx++] = 0x55;             // Record Type 'U' (URI)
+    payloadBytes[idx++] = 0x04;             // URI Prefix Code (0x04 = https://)
+
+    for (uint8_t i = 0; i < domainLen; i++) {
+      payloadBytes[idx++] = targetDomain[i];
+    }
+    payloadBytes[idx++] = 0xFE;             // Terminator TLV Tag
+
+    // Step 3: Write payload starting at Page 4
+    uint8_t totalPages = (idx + 3) / 4;
+    uint8_t pageBuffer[4];
+
+    for (uint8_t page = 0; page < totalPages; page++) {
+      for (uint8_t b = 0; b < 4; b++) {
+        uint16_t byteIdx = page * 4 + b;
+        pageBuffer[b] = (byteIdx < idx) ? payloadBytes[byteIdx] : 0x00;
+      }
+      nfc.ntag2xx_WritePage(4 + page, pageBuffer);
+    }
+
+    Serial.println("SUCCESS! NDEF Web Link written onto NFC Card.");
+    Serial.print("URL: https://");
+    Serial.println(targetDomain);
     
     while(1) { delay(1000); }
   }
