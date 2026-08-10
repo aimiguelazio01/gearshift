@@ -29,8 +29,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   useEffect(() => {
     const saved = settings.get();
-    if (saved.publicBaseUrl && !saved.publicBaseUrl.includes('gearshift-one.vercel.app')) {
-      setPublicBaseUrl(saved.publicBaseUrl);
+    const savedBaseUrl = saved.publicBaseUrl.replace('gearshift-one.vercel.app', 'gearshift1.vercel.app');
+    if (savedBaseUrl) {
+      setPublicBaseUrl(savedBaseUrl);
+      if (savedBaseUrl !== saved.publicBaseUrl) settings.update({ publicBaseUrl: savedBaseUrl });
     } else if (typeof window !== 'undefined') {
       const origin = window.location.origin;
       if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('gearshift-one')) {
@@ -43,7 +45,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   const handleSaveDomain = () => {
     if (publicBaseUrl) {
-      settings.update({ publicBaseUrl });
+      const normalizedUrl = publicBaseUrl.replace('gearshift-one.vercel.app', 'gearshift1.vercel.app');
+      settings.update({ publicBaseUrl: normalizedUrl });
+      setPublicBaseUrl(normalizedUrl);
       setDomainSaved(true);
       setTimeout(() => setDomainSaved(false), 2500);
     }
@@ -79,8 +83,17 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const nfcStudioServer = (settings.get().nfcStudioUrl || 'http://localhost:3001').replace(/\/$/, '');
   const nfcStudioAppUrl = `${nfcStudioServer}/?url=${encodeURIComponent(portalUrl)}&autowrite=true`;
 
+  const openNFCStudio = () => {
+    if (typeof window === 'undefined') return;
+    window.open(nfcStudioAppUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const handleNFCStudioWrite = async () => {
     setNfcStatus(null);
+
+    // Open this during the user click so popup blocking does not prevent the
+    // local NFC Studio tab after an asynchronous USB/Web NFC attempt.
+    openNFCStudio();
 
     // 1. Web Serial API (Chrome/Edge over HTTPS on Vercel or Localhost)
     if (typeof window !== 'undefined' && 'serial' in navigator) {
@@ -171,7 +184,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       // HTTPS→HTTP fetch blocked by browser — expected when on Vercel
     }
 
-    setNfcStatus(`ℹ️ URL pronta a gravar: ${portalUrl}\n\n👉 Se o pop-up de porta USB não abriu, clique no botão "🔗 Abrir NFC Studio Local" abaixo.`);
+    setNfcStatus(`ℹ️ URL pronta a gravar: ${portalUrl}\n\n⚠️ O servidor Arduino local (${nfcStudioServer}) não está ativo nesta máquina.\n\n👉 Execute "Write-NFC-Card.bat" (ou abra "NFC-Card-Writer.exe") e tente novamente.`);
   };
 
   const qrCodeImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(portalUrl)}`;
