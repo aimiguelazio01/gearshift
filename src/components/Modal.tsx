@@ -29,27 +29,28 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+    <div className="fixed inset-0 z-[100] grid place-items-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm overflow-hidden">
+      {/* Clickable Backdrop */}
+      <div className="fixed inset-0 -z-10" onClick={onClose} aria-hidden="true" />
 
-      {/* Modal content */}
+      {/* Modal Dialog Box - Perfectly Centered */}
       <div
         ref={dialogRef}
         className={`
           relative ${maxWidth} w-full rounded-2xl
           bg-[var(--card)] border border-[var(--border)]
-          shadow-2xl shadow-black/40
-          animate-in fade-in zoom-in-95
+          shadow-2xl shadow-black/70
+          animate-in fade-in zoom-in-95 duration-150
           max-h-[85vh] flex flex-col
+          overflow-hidden text-left m-auto
         `}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
-          <h2 className="text-lg font-semibold text-[var(--foreground)]">{title}</h2>
+        {/* Fixed Header */}
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[var(--border)] shrink-0 bg-[var(--card)]">
+          <h2 className="text-base sm:text-lg font-bold text-[var(--foreground)] truncate pr-2">{title}</h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--hover)] transition-colors"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--hover)] transition-colors shrink-0"
             aria-label="Close"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -58,8 +59,8 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
           </button>
         </div>
 
-        {/* Body */}
-        <div className="px-6 py-4 overflow-y-auto flex-1">
+        {/* Scrollable Content */}
+        <div className="px-5 sm:px-6 py-4 overflow-y-auto flex-1 overscroll-contain">
           {children}
         </div>
       </div>

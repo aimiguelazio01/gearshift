@@ -26,7 +26,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => { reload(); }, [reload]);
 
   if (!vehicle) {
-    return <div className="text-center py-20 text-[var(--muted)]">Vehicle not found</div>;
+    return <div className="text-center py-20 text-[var(--muted)]">{t('veh_not_found')}</div>;
   }
 
   const nextService = vehicle.next_service_mileage;
@@ -115,11 +115,11 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       {/* Service History Timeline */}
       <div className="card">
         <div className="p-5 border-b border-[var(--border)]">
-          <h2 className="text-sm font-semibold">{t('cust_service_history')} ({woList.length} registos)</h2>
+          <h2 className="text-sm font-semibold">{t('cust_service_history')} ({woList.length})</h2>
         </div>
         <div className="p-5">
           {woList.length === 0 ? (
-            <p className="text-center py-8 text-[var(--muted)]">Sem registos de serviço para este veículo</p>
+            <p className="text-center py-8 text-[var(--muted)]">{t('veh_no_history')}</p>
           ) : (
             <div className="relative">
               {/* Timeline line */}
@@ -140,7 +140,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                             <p className="text-sm font-medium text-[var(--foreground)]">{wo.customer_notes.slice(0, 80)}</p>
                             <div className="flex items-center gap-3 mt-2">
                               <StatusBadge status={wo.status} size="sm" />
-                              {tech && <span className="text-xs text-[var(--muted)]">Técnico: {tech.name}</span>}
+                              {tech && <span className="text-xs text-[var(--muted)]">{t('wo_technician')}: {tech.name}</span>}
                             </div>
                           </div>
                           <div className="text-right shrink-0 ml-4">

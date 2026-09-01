@@ -7,7 +7,7 @@
 Adafruit_PN532 nfc(PN532_IRQ, PN532_RESET);
 
 // State variables
-String pendingPayload = "https://gearshift2.vercel.app/portal/sofiamendes";
+String pendingPayload = "gearshift2.vercel.app/portal/translogislda";
 String pendingType = "URL"; // "URL" or "TEXT"
 bool hasPendingWrite = true;
 bool autoReadOnTap = false;
@@ -65,32 +65,28 @@ void parseSerialCommand(String cmd) {
   }
 }
 
+bool writePageVerified(uint8_t page, uint8_t *expected);
+
 bool writeNtag215Payload(String data, String type) {
   uint8_t payloadBytes[500];
   uint16_t payloadLen = 0;
   
   if (type == "URL") {
-    uint8_t prefixCode = 0x04; // Default to 0x04 (https://)
-    String cleanData = data;
-    
-    if (data.startsWith("https://www.")) {
-      prefixCode = 0x02;
-      cleanData = data.substring(12);
-    } else if (data.startsWith("http://www.")) {
-      prefixCode = 0x01;
-      cleanData = data.substring(11);
-    } else if (data.startsWith("https://")) {
-      prefixCode = 0x04;
-      cleanData = data.substring(8);
-    } else if (data.startsWith("http://")) {
-      prefixCode = 0x03;
-      cleanData = data.substring(7);
-    } else {
-      prefixCode = 0x04; // Default scheme https:// if user omitted protocol
-      cleanData = data;
-    }
+    // Keep the same URI profile used by the previously working localhost
+    // writer: URI identifier 0x03 (http://). Vercel redirects this to HTTPS.
+    uint8_t prefixCode = 0x03;
+    uint8_t uriStart = 0;
+    if (data.startsWith("https://")) uriStart = 8;
+    else if (data.startsWith("http://")) uriStart = 7;
 
-    uint8_t uriStringLen = cleanData.length();
+    uint8_t uriStringLen = data.length() > uriStart ? data.length() - uriStart : 0;
+    Serial.print("DEBUG:URI_LENGTH=");
+    Serial.print(uriStringLen);
+    Serial.print(":");
+    for (uint8_t i = 0; i < uriStringLen; i++) {
+      Serial.print(data.charAt(uriStart + i));
+    }
+    Serial.println();
     uint8_t recordPayloadLen = 1 + uriStringLen; // 1 prefix byte + string length
     uint8_t ndefMsgLen = 4 + recordPayloadLen;  // 0xD1, 0x01, PL, 0x55 + recordPayload
 
@@ -104,7 +100,7 @@ bool writeNtag215Payload(String data, String type) {
     payloadBytes[6] = prefixCode;
 
     for (uint8_t i = 0; i < uriStringLen; i++) {
-      payloadBytes[7 + i] = cleanData.charAt(i);
+      payloadBytes[7 + i] = data.charAt(uriStart + i);
     }
     
     payloadLen = 7 + uriStringLen;
@@ -133,10 +129,13 @@ bool writeNtag215Payload(String data, String type) {
     payloadBytes[payloadLen++] = 0xFE; // Terminator TLV
   }
 
-  // Ensure NTAG215 Capability Container (Page 3) is initialized for NDEF compatibility
-  // NTAG215: 504 bytes of user memory (0x3E capacity in the CC).
-  uint8_t ccPage[4] = { 0xE1, 0x10, 0x3E, 0x00 };
-  nfc.ntag2xx_WritePage(3, ccPage);
+  // Preserve the tag's existing Capability Container. Some cards lock this
+  // page after formatting, while the NDEF record itself remains writable.
+  uint8_t ccPage[4];
+  if (!nfc.ntag2xx_ReadPage(3, ccPage)) {
+    Serial.println("ERROR:READ_CC_PAGE_FAILED");
+    return false;
+  }
 
   // Calculate pages required for NDEF payload starting at Page 4
   uint8_t totalPages = (payloadLen + 3) / 4;
@@ -149,34 +148,67 @@ bool writeNtag215Payload(String data, String type) {
     }
     
     uint8_t pageNum = 4 + page;
-    if (!nfc.ntag2xx_WritePage(pageNum, pageBuffer)) {
+    if (!writePageVerified(pageNum, pageBuffer)) {
       Serial.println("ERROR:WRITE_PAGE_FAILED:" + String(pageNum));
       return false;
     }
   }
 
+  Serial.println("VERIFY:NDEF_BYTES_OK");
   return true;
+}
+
+bool writePageVerified(uint8_t page, uint8_t *expected) {
+  uint8_t actual[4];
+
+  // The CC may already be correct and some NTAG215 cards reject rewriting it.
+  if (nfc.ntag2xx_ReadPage(page, actual)) {
+    bool alreadyMatches = true;
+    for (uint8_t i = 0; i < 4; i++) {
+      if (actual[i] != expected[i]) alreadyMatches = false;
+    }
+    if (alreadyMatches) return true;
+  }
+
+  if (!nfc.ntag2xx_WritePage(page, expected)) return false;
+
+  delay(25);
+  if (!nfc.ntag2xx_ReadPage(page, actual)) return false;
+
+  bool matches = true;
+  for (uint8_t i = 0; i < 4; i++) {
+    if (actual[i] != expected[i]) matches = false;
+  }
+
+  if (!matches) {
+    Serial.print("VERIFY:PAGE=");
+    Serial.print(page);
+    Serial.print(":READ=");
+    for (uint8_t i = 0; i < 4; i++) {
+      if (actual[i] < 0x10) Serial.print("0");
+      Serial.print(actual[i], HEX);
+    }
+    Serial.println();
+  }
+  return matches;
 }
 
 void readNtag215Card() {
   uint8_t data[4];
-  String readContent = "";
-  Serial.print("READ:DATA:");
-  
-  for (uint8_t page = 4; page < 16; page++) {
+  Serial.print("READ:HEX:");
+
+  // Include CC page 3 and the first NDEF pages so the tag format can be verified.
+  for (uint8_t page = 3; page < 20; page++) {
     if (nfc.ntag2xx_ReadPage(page, data)) {
       for (uint8_t i = 0; i < 4; i++) {
-        if (data[i] >= 32 && data[i] <= 126) {
-          readContent += (char)data[i];
-        } else {
-          readContent += ".";
-        }
+        if (data[i] < 0x10) Serial.print("0");
+        Serial.print(data[i], HEX);
       }
     } else {
       break;
     }
   }
-  Serial.println(readContent);
+  Serial.println();
 }
 
 void loop(void) {

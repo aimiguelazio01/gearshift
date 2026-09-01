@@ -5,11 +5,14 @@ import Link from 'next/link';
 import { parts, suppliers, stockMovements } from '@/lib/store';
 import { marginPercent } from '@/lib/utils';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
+import { translateCategory, translatePartName, translatePartDesc } from '@/lib/translations';
 import type { Part, Supplier, StockMovement } from '@/lib/types';
 
 export default function PartDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { t, formatCurrency, formatDateTime } = useLanguage();
+  const { t, lang, formatCurrency, formatDateTime } = useLanguage();
+  const { isTechnician } = useAuth();
   const [part, setPart] = useState<Part | null>(null);
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [movements, setMovements] = useState<StockMovement[]>([]);
@@ -28,15 +31,18 @@ export default function PartDetailPage({ params }: { params: Promise<{ id: strin
   useEffect(() => { reload(); }, [reload]);
 
   if (!part) {
-    return <div className="text-center py-20 text-[var(--muted)]">Part not found</div>;
+    return <div className="text-center py-20 text-[var(--muted)]">{t('parts_not_found')}</div>;
   }
 
   const isLow = part.qty_on_hand <= part.reorder_threshold;
   const margin = marginPercent(part.cost_price, part.sale_price);
+  const displayName = translatePartName(part.name, lang);
+  const displayDesc = translatePartDesc(part.description, lang);
+  const displayCategory = translateCategory(part.category, lang);
 
   const reasonLabels: Record<string, { label: string; color: string }> = {
     received: { label: t('parts_reason_received'), color: 'text-emerald-400' },
-    used_on_job: { label: 'Usado em Serviço', color: 'text-amber-400' },
+    used_on_job: { label: t('parts_reason_used_on_job'), color: 'text-amber-400' },
     adjusted: { label: t('parts_reason_adjusted'), color: 'text-blue-400' },
     returned: { label: t('parts_reason_returned'), color: 'text-purple-400' },
   };
@@ -46,7 +52,7 @@ export default function PartDetailPage({ params }: { params: Promise<{ id: strin
       <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
         <Link href="/parts" className="hover:text-blue-400 transition-colors">{t('parts_title')}</Link>
         <span>›</span>
-        <span className="text-[var(--foreground)]">{part.name}</span>
+        <span className="text-[var(--foreground)]">{displayName}</span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -55,28 +61,34 @@ export default function PartDetailPage({ params }: { params: Promise<{ id: strin
           <div className="card p-6">
             <div className="flex items-start justify-between">
               <div>
-                <h1 className="text-xl font-bold text-[var(--foreground)]">{part.name}</h1>
+                <h1 className="text-xl font-bold text-[var(--foreground)]">{displayName}</h1>
                 <p className="font-mono text-sm text-[var(--muted)] mt-1">{part.sku}</p>
-                {part.description && <p className="text-sm text-[var(--muted)] mt-2">{part.description}</p>}
+                {displayDesc && <p className="text-sm text-[var(--muted)] mt-2">{displayDesc}</p>}
               </div>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-[var(--hover)] text-[var(--muted)]">{part.category}</span>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-[var(--hover)] text-[var(--muted)] font-semibold">
+                {displayCategory}
+              </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-              <div className="p-3 rounded-xl bg-[var(--hover)]">
-                <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider">{t('parts_cost')}</span>
-                <p className="text-lg font-bold text-[var(--foreground)] mt-1">{formatCurrency(part.cost_price)}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-[var(--hover)]">
-                <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider">{t('parts_sale')}</span>
-                <p className="text-lg font-bold text-[var(--foreground)] mt-1">{formatCurrency(part.sale_price)}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-[var(--hover)]">
-                <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider">{t('parts_margin')}</span>
-                <p className={`text-lg font-bold mt-1 ${margin > 40 ? 'text-emerald-400' : margin > 20 ? 'text-amber-400' : 'text-red-400'}`}>
-                  {margin.toFixed(1)}%
-                </p>
-              </div>
+            <div className={`grid gap-4 mt-6 ${isTechnician ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
+              {!isTechnician && (
+                <>
+                  <div className="p-3 rounded-xl bg-[var(--hover)]">
+                    <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider">{t('parts_cost')}</span>
+                    <p className="text-lg font-bold text-[var(--foreground)] mt-1">{formatCurrency(part.cost_price)}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[var(--hover)]">
+                    <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider">{t('parts_sale')}</span>
+                    <p className="text-lg font-bold text-[var(--foreground)] mt-1">{formatCurrency(part.sale_price)}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[var(--hover)]">
+                    <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider">{t('parts_margin')}</span>
+                    <p className={`text-lg font-bold mt-1 ${margin > 40 ? 'text-emerald-400' : margin > 20 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {margin.toFixed(1)}%
+                    </p>
+                  </div>
+                </>
+              )}
               <div className={`p-3 rounded-xl ${isLow ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
                 <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider">{t('parts_stock')}</span>
                 <p className={`text-lg font-bold mt-1 ${isLow ? 'text-red-400' : 'text-emerald-400'}`}>
@@ -97,16 +109,16 @@ export default function PartDetailPage({ params }: { params: Promise<{ id: strin
           {/* Stock Movement History */}
           <div className="card">
             <div className="p-5 border-b border-[var(--border)]">
-              <h2 className="text-sm font-semibold">Histórico de Movimentos de Stock</h2>
+              <h2 className="text-sm font-semibold">{t('parts_movement_history')}</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Data</th>
-                    <th>Motivo</th>
-                    <th className="text-right">Qtd</th>
-                    <th>Ordem de Serviço</th>
+                    <th>{t('date')}</th>
+                    <th>{t('parts_reason')}</th>
+                    <th className="text-right">{t('quantity')}</th>
+                    <th>{t('wo_order_number')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -130,7 +142,7 @@ export default function PartDetailPage({ params }: { params: Promise<{ id: strin
                     );
                   })}
                   {movements.length === 0 && (
-                    <tr><td colSpan={4} className="text-center py-8 text-[var(--muted)]">Sem movimentos registados</td></tr>
+                    <tr><td colSpan={4} className="text-center py-8 text-[var(--muted)]">{t('parts_no_movements')}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -141,15 +153,15 @@ export default function PartDetailPage({ params }: { params: Promise<{ id: strin
         {/* Supplier Info */}
         <div className="space-y-6">
           <div className="card p-5">
-            <h3 className="text-sm font-semibold mb-3">Fornecedor</h3>
+            <h3 className="text-sm font-semibold mb-3">{t('parts_supplier')}</h3>
             {supplier ? (
               <div className="space-y-2">
                 <p className="font-medium text-[var(--foreground)]">{supplier.name}</p>
                 <p className="text-sm text-[var(--muted)]">{supplier.contact_info}</p>
-                <p className="text-sm text-[var(--muted)]">Prazo de entrega: {supplier.lead_time_days} dias</p>
+                <p className="text-sm text-[var(--muted)]">{t('parts_lead_time')}: {supplier.lead_time_days} {t('parts_days')}</p>
               </div>
             ) : (
-              <p className="text-sm text-[var(--muted)]">Sem fornecedor atribuído</p>
+              <p className="text-sm text-[var(--muted)]">{t('parts_no_supplier')}</p>
             )}
           </div>
         </div>

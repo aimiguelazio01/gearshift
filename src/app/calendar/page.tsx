@@ -26,7 +26,7 @@ function startOfWeek(d: Date): Date {
 }
 
 export default function CalendarPage() {
-  const { t, formatCurrency, formatDate, formatDateTime } = useLanguage();
+  const { t, lang, formatCurrency, formatDateTime } = useLanguage();
   const [woList, setWoList] = useState<WorkOrder[]>([]);
   const [vehicleList, setVehicleList] = useState<Vehicle[]>([]);
   const [customerList, setCustomerList] = useState<Customer[]>([]);
@@ -86,7 +86,6 @@ export default function CalendarPage() {
       if (calendarMode === 'created') {
         return createdDate === dateStr;
       }
-      // Mode 'all': match either scheduled date (priority) or created date
       return scheduledDate === dateStr || (!scheduledDate && createdDate === dateStr);
     });
   }
@@ -116,12 +115,14 @@ export default function CalendarPage() {
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const HOURS = Array.from({ length: 11 }, (_, i) => i + 8); // 8..18
 
+  const locale = lang === 'pt' ? 'pt-PT' : 'en-US';
+
   // ── Title ──
   const titleLabel = view === 'day'
-    ? currentDate.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    ? currentDate.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : view === 'week'
-    ? `${weekDays[0].toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })} — ${weekDays[6].toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' })}`
-    : currentDate.toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
+    ? `${weekDays[0].toLocaleDateString(locale, { day: 'numeric', month: 'short' })} — ${weekDays[6].toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })}`
+    : currentDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
 
   // ── Submit handlers ──
   const handleScheduleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -234,18 +235,22 @@ export default function CalendarPage() {
 
         {isScheduled ? (
           <div className="text-[9px] text-emerald-400 font-medium mt-1 flex justify-between items-center">
-            <span>🔧 Reparação: {wo.scheduled_start?.split('T')[1]?.slice(0, 5)}</span>
+            <span>🔧 {t('wo_repair_date').split('(')[0]}: {wo.scheduled_start?.split('T')[1]?.slice(0, 5)}</span>
             <span>{wo.estimated_hours || 2}h</span>
           </div>
         ) : (
           <div className="text-[9px] text-purple-400 font-medium mt-1">
-            📝 Criada: {wo.created_at.split('T')[0]}
+            📝 {t('wo_created_date').split('(')[0]}: {wo.created_at.split('T')[0]}
           </div>
         )}
         {!compact && tech && <p className="text-[9px] text-[var(--muted)] mt-0.5">👷 {tech.name}</p>}
       </div>
     );
   }
+
+  const dayHeaderNames = lang === 'pt'
+    ? ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+    : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -258,7 +263,7 @@ export default function CalendarPage() {
         <div className="flex gap-2 items-center flex-wrap">
           <button className="btn-primary text-xs flex items-center gap-1.5" onClick={() => { setCreateSelectedDate(isoDate(new Date())); setShowCreateModal(true); }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            + Agendar Serviço
+            {t('cal_add_service')}
           </button>
           <button className="btn-secondary text-xs" onClick={goToday}>{t('cal_today')}</button>
           <div className="flex rounded-xl overflow-hidden border border-[var(--border)]">
@@ -273,10 +278,9 @@ export default function CalendarPage() {
 
       {/* ═══ Mode Selector (Created vs Scheduled) & Nav + Filters ═══ */}
       <div className="card p-4 space-y-4">
-        {/* Toggle Mode: All / Scheduled / Created */}
         <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-[var(--border)]">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-[var(--foreground)]">Filtrar por:</span>
+            <span className="text-xs font-bold text-[var(--foreground)]">{t('cal_filter_by')}</span>
             <div className="flex rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--hover)]">
               <button
                 onClick={() => setCalendarMode('all')}
@@ -327,13 +331,13 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════ */}
       {/* ═══ MONTH VIEW ═══ */}
-      {/* ═══════════════════════════════════════════ */}
       {view === 'month' && (
         <div className="card overflow-hidden">
           <div className="grid grid-cols-7 border-b border-[var(--border)] bg-[var(--hover)] text-center text-xs font-bold text-[var(--muted)] py-3">
-            <div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div><div>Dom</div>
+            {dayHeaderNames.map(day => (
+              <div key={day}>{day}</div>
+            ))}
           </div>
           <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-[var(--border)]">
             {calendarDays.map(({ date, isCurrentMonth }, idx) => {
@@ -350,7 +354,7 @@ export default function CalendarPage() {
                     <span className={`text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center ${isToday ? 'bg-blue-500 text-white' : 'text-[var(--foreground)]'}`}>{date.getDate()}</span>
                     {dayWOs.length > 0
                       ? <span className="text-[10px] font-semibold text-blue-400">{dayWOs.length} OS</span>
-                      : <span className="text-[10px] text-blue-400 opacity-0 group-hover/cell:opacity-100 transition-opacity">+ Agendar</span>}
+                      : <span className="text-[10px] text-blue-400 opacity-0 group-hover/cell:opacity-100 transition-opacity">{t('cal_add_service')}</span>}
                   </div>
                   <div className="space-y-1 flex-1 overflow-y-auto max-h-[90px]">
                     {dayWOs.map(wo => <WOCard key={wo.id} wo={wo} compact />)}
@@ -362,27 +366,22 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════ */}
       {/* ═══ WEEK VIEW ═══ */}
-      {/* ═══════════════════════════════════════════ */}
       {view === 'week' && (
         <div className="card overflow-hidden">
-          {/* Header row with day names */}
           <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-[var(--border)] bg-[var(--hover)]">
-            <div className="p-2 text-center text-[10px] font-bold text-[var(--muted)] border-r border-[var(--border)]">Hora</div>
+            <div className="p-2 text-center text-[10px] font-bold text-[var(--muted)] border-r border-[var(--border)]">{t('hours')}</div>
             {weekDays.map((d, i) => {
               const dateStr = isoDate(d);
               const isToday = dateStr === isoDate(new Date());
-              const dayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
               return (
                 <div key={i} className={`p-2 text-center border-r border-[var(--border)] last:border-r-0 ${isToday ? 'bg-blue-500/10' : ''}`}>
-                  <p className="text-[10px] font-bold text-[var(--muted)]">{dayNames[i]}</p>
+                  <p className="text-[10px] font-bold text-[var(--muted)]">{dayHeaderNames[i]}</p>
                   <p className={`text-sm font-bold ${isToday ? 'text-blue-400' : 'text-[var(--foreground)]'}`}>{d.getDate()}</p>
                 </div>
               );
             })}
           </div>
-          {/* Hour rows */}
           <div className="divide-y divide-[var(--border)]">
             {HOURS.map(hour => (
               <div key={hour} className="grid grid-cols-[80px_repeat(7,1fr)] min-h-[60px]">
@@ -413,14 +412,11 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════ */}
       {/* ═══ DAY VIEW ═══ */}
-      {/* ═══════════════════════════════════════════ */}
       {view === 'day' && (
         <div className="card overflow-hidden">
-          {/* Lift columns header */}
           <div className="grid grid-cols-[80px_repeat(3,1fr)] border-b border-[var(--border)] bg-[var(--hover)]">
-            <div className="p-3 text-center text-[10px] font-bold text-[var(--muted)] border-r border-[var(--border)]">Hora</div>
+            <div className="p-3 text-center text-[10px] font-bold text-[var(--muted)] border-r border-[var(--border)]">{t('hours')}</div>
             {liftList.map(l => (
               <div key={l.id} className="p-3 text-center border-r border-[var(--border)] last:border-r-0">
                 <p className="text-xs font-bold text-[var(--foreground)]">{l.name.split('(')[0].trim()}</p>
@@ -428,7 +424,6 @@ export default function CalendarPage() {
               </div>
             ))}
           </div>
-          {/* Hour rows × Lift columns */}
           <div className="divide-y divide-[var(--border)]">
             {HOURS.map(hour => {
               const dateStr = isoDate(currentDate);
@@ -466,9 +461,9 @@ export default function CalendarPage() {
         <div className="card p-5 space-y-3">
           <h3 className="text-sm font-bold text-[var(--foreground)] flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            Ordens de Serviço Pendentes de Agendamento Manual de Reparação ({unscheduledWOs.length})
+            {t('cal_unscheduled_title')} ({unscheduledWOs.length})
           </h3>
-          <p className="text-xs text-[var(--muted)]">Estas ordens têm data de criação automática mas ainda não têm data/hora de reparação definida.</p>
+          <p className="text-xs text-[var(--muted)]">{t('cal_unscheduled_sub')}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {unscheduledWOs.map(wo => <WOCard key={wo.id} wo={wo} />)}
           </div>
@@ -476,80 +471,82 @@ export default function CalendarPage() {
       )}
 
       {/* ═══ Edit Scheduled WO Modal ═══ */}
-      <Modal open={!!scheduleWOId} onClose={() => setScheduleWOId(null)} title="Gerir Datas & Agendamento de Reparação" maxWidth="max-w-xl">
+      <Modal open={!!scheduleWOId} onClose={() => setScheduleWOId(null)} title={t('cal_manage_schedule')} maxWidth="max-w-xl">
         {selectedWO && (
-          <div className="space-y-5">
-            <div className="p-4 rounded-xl bg-[var(--hover)] border border-[var(--border)] flex items-start justify-between">
+          <div className="space-y-4 text-xs">
+            {/* Header info */}
+            <div className="p-3.5 rounded-xl bg-[var(--hover)] border border-[var(--border)] flex items-start justify-between gap-3">
               <div>
-                <p className="font-bold text-base text-[var(--foreground)]">OS #{selectedWO.id.slice(0, 6).toUpperCase()}</p>
-                <p className="text-xs text-[var(--muted)] mt-0.5">Cliente: <strong className="text-[var(--foreground)]">{customerList.find(c => c.id === selectedWO.customer_id)?.name}</strong></p>
-                <p className="text-xs text-[var(--muted)]">Veículo: <strong className="text-[var(--foreground)]">{vehicleList.find(v => v.id === selectedWO.vehicle_id)?.make} {vehicleList.find(v => v.id === selectedWO.vehicle_id)?.model} ({vehicleList.find(v => v.id === selectedWO.vehicle_id)?.plate})</strong></p>
+                <p className="font-bold text-sm text-[var(--foreground)]">OS #{selectedWO.id.slice(0, 6).toUpperCase()}</p>
+                <p className="text-xs text-[var(--muted)] mt-0.5">{t('inv_customer')}: <strong className="text-[var(--foreground)]">{customerList.find(c => c.id === selectedWO.customer_id)?.name}</strong></p>
+                <p className="text-xs text-[var(--muted)]">{t('inv_vehicle')}: <strong className="text-[var(--foreground)]">{vehicleList.find(v => v.id === selectedWO.vehicle_id)?.make} {vehicleList.find(v => v.id === selectedWO.vehicle_id)?.model} ({vehicleList.find(v => v.id === selectedWO.vehicle_id)?.plate})</strong></p>
+                <p className="text-[11px] text-purple-300 mt-1 font-mono">📝 {t('wo_created_date')}: {formatDateTime(selectedWO.created_at)}</p>
               </div>
               <StatusBadge status={selectedWO.status} />
             </div>
 
-            {/* Display Creation Date (Automatic) */}
-            <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between text-xs">
-              <span className="text-purple-300 font-semibold">📝 Data de Criação (Automática):</span>
-              <span className="font-mono text-purple-200">{formatDateTime(selectedWO.created_at)}</span>
-            </div>
-
             {/* Manual Repair Date Form */}
-            <form onSubmit={handleScheduleSubmit} className="space-y-4 pt-2 border-t border-[var(--border)]">
-              <h4 className="text-xs font-bold text-[var(--foreground)] uppercase tracking-wider">🔧 Data da Reparação (Manual & Calendário)</h4>
+            <form onSubmit={handleScheduleSubmit} className="space-y-3 pt-3 border-t border-[var(--border)]">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-[var(--foreground)] uppercase tracking-wider">🔧 {t('wo_repair_date')}</h4>
+                <Link href={`/work-orders/${selectedWO.id}`} className="text-xs text-blue-400 hover:text-blue-300 font-semibold">{t('btn_view_details')} →</Link>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="form-label">Elevador Atribuído</label>
+                  <label className="form-label">{t('wo_lift_assigned')}</label>
                   <select name="lift_id" defaultValue={selectedWO.lift_id || ''} className="w-full">
-                    <option value="">Sem Elevador</option>
+                    <option value="">{t('wo_no_lift')}</option>
                     {liftList.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="form-label">Técnico Responsável</label>
+                  <label className="form-label">{t('wo_technician')}</label>
                   <select name="assigned_technician_id" defaultValue={selectedWO.assigned_technician_id || ''} className="w-full">
-                    <option value="">Não Atribuído</option>
+                    <option value="">{t('wo_unassigned')}</option>
                     {techList.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
                 </div>
               </div>
+
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="form-label">Data Reparação *</label>
+                  <label className="form-label">{t('date')} *</label>
                   <input type="date" name="date" required defaultValue={selectedWO.scheduled_start?.split('T')[0] || isoDate(new Date())} className="w-full" />
                 </div>
                 <div>
-                  <label className="form-label">Hora *</label>
+                  <label className="form-label">{t('cal_start_time')} *</label>
                   <input type="time" name="start_time" required defaultValue={selectedWO.scheduled_start?.split('T')[1]?.slice(0, 5) || '09:00'} className="w-full" />
                 </div>
                 <div>
-                  <label className="form-label">Duração (h) *</label>
+                  <label className="form-label">{t('cal_est_hours')} *</label>
                   <input type="number" name="estimated_hours" step="0.5" min="0.5" required defaultValue={selectedWO.estimated_hours || 2} className="w-full" />
                 </div>
               </div>
-              <div className="flex items-center justify-between pt-2">
-                <Link href={`/work-orders/${selectedWO.id}`} className="text-xs text-blue-400 hover:text-blue-300 font-semibold">Abrir Detalhe da OS →</Link>
-                <button type="submit" className="btn-primary text-xs">Guardar Data de Reparação</button>
+
+              <div className="flex justify-end pt-1">
+                <button type="submit" className="btn-primary text-xs py-2 px-4 shadow-md shadow-blue-500/20">{t('cal_save_repair_date')}</button>
               </div>
             </form>
 
             {/* Labor lines */}
-            <div className="pt-4 border-t border-[var(--border)] space-y-3">
-              <h4 className="text-xs font-bold text-[var(--foreground)] uppercase tracking-wider">Serviços Registados</h4>
-              <div className="space-y-2 max-h-36 overflow-y-auto">
+            <div className="pt-3 border-t border-[var(--border)] space-y-2">
+              <h4 className="text-xs font-bold text-[var(--foreground)] uppercase tracking-wider">{t('cal_registered_services')}</h4>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
                 {selectedWO.labor_lines.map(line => (
-                  <div key={line.id} className="p-2.5 rounded-xl bg-[var(--hover)] flex items-center justify-between text-xs">
+                  <div key={line.id} className="p-2 rounded-lg bg-[var(--hover)] flex items-center justify-between text-xs">
                     <span className="font-medium text-[var(--foreground)]">{line.description}</span>
                     <span className="text-[var(--muted)] font-mono">{line.hours}h @ {formatCurrency(line.rate)}/h</span>
                   </div>
                 ))}
-                {selectedWO.labor_lines.length === 0 && <p className="text-xs text-[var(--muted)] italic">Nenhum serviço adicionado.</p>}
+                {selectedWO.labor_lines.length === 0 && <p className="text-xs text-[var(--muted)] italic py-1">{t('cal_no_services')}</p>}
               </div>
-              <form onSubmit={handleAddLaborInCalendar} className="flex gap-2 pt-2">
-                <input type="text" name="description" placeholder="Novo serviço..." required className="flex-1 text-xs" />
-                <input type="number" name="hours" step="0.25" defaultValue="1" className="w-16 text-xs" />
-                <input type="number" name="rate" defaultValue="75" className="w-16 text-xs" />
-                <button type="submit" className="btn-secondary text-xs whitespace-nowrap">+ Add</button>
+
+              <form onSubmit={handleAddLaborInCalendar} className="flex gap-2 pt-1">
+                <input type="text" name="description" placeholder={t('description')} required className="flex-1 text-xs" />
+                <input type="number" name="hours" step="0.25" defaultValue="1" className="w-14 text-xs text-center" />
+                <input type="number" name="rate" defaultValue="75" className="w-14 text-xs text-center" />
+                <button type="submit" className="btn-secondary text-xs whitespace-nowrap">{t('add')}</button>
               </form>
             </div>
           </div>
@@ -557,63 +554,63 @@ export default function CalendarPage() {
       </Modal>
 
       {/* ═══ Create New Service Modal ═══ */}
-      <Modal open={showCreateModal} onClose={() => { setShowCreateModal(false); setSelectedCustomer(''); }} title="Agendar Novo Serviço de Reparação" maxWidth="max-w-xl">
+      <Modal open={showCreateModal} onClose={() => { setShowCreateModal(false); setSelectedCustomer(''); }} title={t('cal_new_service_modal')} maxWidth="max-w-xl">
         <form onSubmit={handleCreateNewService} className="space-y-4">
           <div>
             <label className="form-label">{t('inv_customer')} *</label>
             <select value={selectedCustomer} onChange={e => setSelectedCustomer(e.target.value)} className="w-full" required>
-              <option value="">Selecionar cliente...</option>
+              <option value="">{t('cust_select_placeholder')}</option>
               {customerList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <label className="form-label">{t('inv_vehicle')} *</label>
             <select name="vehicle_id" required className="w-full">
-              <option value="">Selecionar veículo...</option>
+              <option value="">{t('wo_select_vehicle')}</option>
               {customerVehicles.map(v => <option key={v.id} value={v.id}>{v.year} {v.make} {v.model} — {v.plate}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="form-label">Elevador (Oficina)</label>
+              <label className="form-label">{t('nav_lifts')}</label>
               <select name="lift_id" className="w-full">
-                <option value="">Sem Elevador</option>
+                <option value="">{t('wo_no_lift')}</option>
                 {liftList.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="form-label">Técnico Responsável</label>
+              <label className="form-label">{t('wo_technician')}</label>
               <select name="assigned_technician_id" className="w-full">
-                <option value="">Não Atribuído</option>
+                <option value="">{t('wo_unassigned')}</option>
                 {techList.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3 p-3 rounded-xl bg-[var(--hover)] border border-[var(--border)]">
             <div>
-              <label className="form-label text-[11px]">Data Reparação *</label>
+              <label className="form-label text-[11px]">{t('date')} *</label>
               <input type="date" name="scheduled_date" required defaultValue={createSelectedDate || isoDate(new Date())} className="w-full text-xs" />
             </div>
             <div>
-              <label className="form-label text-[11px]">Hora Início *</label>
+              <label className="form-label text-[11px]">{t('cal_start_time')} *</label>
               <input type="time" name="scheduled_time" required defaultValue="09:00" className="w-full text-xs" />
             </div>
             <div>
-              <label className="form-label text-[11px]">Duração (h)</label>
+              <label className="form-label text-[11px]">{t('cal_est_hours')}</label>
               <input type="number" name="estimated_hours" step="0.5" defaultValue="2" min="0.5" className="w-full text-xs" />
             </div>
           </div>
           <div>
-            <label className="form-label">Descrição do Serviço</label>
+            <label className="form-label">{t('description')}</label>
             <input type="text" name="initial_labor" placeholder="ex: Mudança de Correia de Distribuição..." className="w-full" />
           </div>
           <div>
-            <label className="form-label">Notas</label>
-            <textarea name="customer_notes" rows={2} placeholder="Observações..." className="w-full" />
+            <label className="form-label">{t('cust_notes')}</label>
+            <textarea name="customer_notes" rows={2} placeholder={t('wo_customer_notes')} className="w-full" />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" className="btn-secondary" onClick={() => { setShowCreateModal(false); setSelectedCustomer(''); }}>{t('cancel')}</button>
-            <button type="submit" className="btn-primary">Criar & Agendar Reparação</button>
+            <button type="submit" className="btn-primary">{t('cal_create_and_schedule')}</button>
           </div>
         </form>
       </Modal>

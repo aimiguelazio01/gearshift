@@ -27,14 +27,8 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
       setCustomerWOs(wos);
       setUserList(users.getAll());
 
-      // Expand active work orders by default
-      const initialExpanded: Record<string, boolean> = {};
-      wos.forEach(w => {
-        if (!['Invoiced', 'Closed'].includes(w.status)) {
-          initialExpanded[w.id] = true;
-        }
-      });
-      setExpandedWOIds(initialExpanded);
+      // Start all repairs collapsed by default
+      setExpandedWOIds({});
     }
   }, [customerId]);
 
@@ -55,7 +49,7 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4 font-sans">
         <div className="text-center space-y-3">
           <div className="text-4xl">🚘</div>
-          <h2 className="text-lg font-bold">Cliente não encontrado</h2>
+          <h2 className="text-lg font-bold">{t('cust_no_found')}</h2>
           <p className="text-xs text-neutral-400">Verifique o link de acesso ao portal do cliente.</p>
         </div>
       </div>
@@ -81,7 +75,7 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
         }}
       />
 
-      {/* Mobile Screen App Frame — Pure Grayscale Chrome Layout */}
+      {/* Mobile Screen App Frame */}
       <div className="w-full max-w-md sm:max-w-lg mx-auto min-h-[90vh] bg-neutral-900/90 backdrop-blur-2xl border border-neutral-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col my-0 sm:my-4 transition-all duration-300 relative z-10">
 
         {/* App Bar Header with GEARSHIFT AUTOMOTIVE Branding */}
@@ -111,7 +105,7 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
 
         {/* Main Body */}
         <main className="flex-1 p-4 space-y-6 overflow-y-auto">
-          {/* Quick Action Contact Buttons — Native Mobile Action Design */}
+          {/* Quick Action Contact Buttons */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <a
               href="tel:+351210000000"
@@ -156,7 +150,7 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-black uppercase tracking-widest text-neutral-400 flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-                Reparações em Curso ({activeWOs.length})
+                {t('portal_active_repairs')} ({activeWOs.length})
               </h2>
 
               {customerWOs.length > 0 && (
@@ -164,7 +158,7 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
                   onClick={() => toggleAll(!allExpanded)}
                   className="text-[11px] text-white hover:text-neutral-300 font-bold transition-colors underline decoration-neutral-600"
                 >
-                  {allExpanded ? 'Colapsar Tudo ▲' : 'Expandir Tudo ▼'}
+                  {allExpanded ? t('portal_collapse_all') : t('portal_expand_all')}
                 </button>
               )}
             </div>
@@ -211,14 +205,14 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
                       <div className="p-4 pt-0 space-y-4 border-t border-neutral-800 animate-fade-in">
                         {/* Service Description */}
                         <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 text-xs space-y-1 mt-3">
-                          <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Descrição do Serviço</span>
+                          <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">{t('portal_service_description')}</span>
                           <p className="text-neutral-200 leading-relaxed">{wo.customer_notes || 'Manutenção / Reparação na Oficina'}</p>
                         </div>
 
                         {/* Labor Lines Breakdown */}
                         {wo.labor_lines && wo.labor_lines.length > 0 && (
                           <div className="space-y-1.5">
-                            <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Serviços em Execução</span>
+                            <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">{t('portal_services_running')}</span>
                             <div className="space-y-1.5">
                               {wo.labor_lines.map(line => (
                                 <div key={line.id} className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-neutral-950 border border-neutral-800">
@@ -233,11 +227,11 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
                         {/* Technician & Repair Time */}
                         <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-neutral-800">
                           <div>
-                            <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Técnico Responsável</span>
+                            <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">{t('portal_responsible_tech')}</span>
                             <p className="text-neutral-200 font-semibold">{tech?.name || 'GEARSHIFT Team'}</p>
                           </div>
                           <div>
-                            <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Data Reparação</span>
+                            <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">{t('portal_repair_date')}</span>
                             <p className="text-neutral-200 font-mono font-bold">
                               {wo.scheduled_start ? wo.scheduled_start.replace('T', ' ') : 'Agendada'}
                             </p>
@@ -246,7 +240,7 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
 
                         {/* Cost & Summary Footer */}
                         <div className="pt-2 border-t border-neutral-800 flex items-center justify-between text-xs">
-                          <span className="text-neutral-400 font-semibold">Total Estimado</span>
+                          <span className="text-neutral-400 font-semibold">{t('portal_est_total')}</span>
                           <span className="text-lg font-black text-white">{formatCurrency(totals.subtotal)}</span>
                         </div>
                       </div>
@@ -256,8 +250,8 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
               })
             ) : (
               <div className="p-6 text-center rounded-2xl bg-neutral-900/60 border border-dashed border-neutral-800 text-neutral-400 space-y-1">
-                <p className="text-sm font-bold text-white">Nenhuma reparação ativa neste momento</p>
-                <p className="text-xs text-neutral-400">O seu veículo não se encontra na oficina.</p>
+                <p className="text-sm font-bold text-white">{t('portal_no_active_repairs')}</p>
+                <p className="text-xs text-neutral-400">{t('portal_vehicle_not_in_shop')}</p>
               </div>
             )}
           </div>
@@ -266,7 +260,7 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
           {pastWOs.length > 0 && (
             <div className="space-y-3 pt-2">
               <h2 className="text-xs font-black uppercase tracking-widest text-neutral-400">
-                Histórico de Reparações ({pastWOs.length})
+                {t('portal_past_repairs')} ({pastWOs.length})
               </h2>
 
               <div className="space-y-2">
@@ -313,7 +307,7 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
           {/* VEHICLES & NEXT REVISION KM */}
           <div className="space-y-3 pt-2">
             <h2 className="text-xs font-black uppercase tracking-widest text-neutral-400">
-              Próxima Revisão Automóvel
+              {t('portal_next_revision')}
             </h2>
 
             <div className="space-y-3">
@@ -337,16 +331,16 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
                     {hasTarget && (
                       <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1.5 text-xs">
                         <div className="flex justify-between">
-                          <span className="text-neutral-400 font-semibold">Meta da Revisão:</span>
+                          <span className="text-neutral-400 font-semibold">{t('portal_revision_target')}</span>
                           <span className="font-mono font-bold text-white">{v.next_service_mileage!.toLocaleString()} km</span>
                         </div>
                         {isOverdue ? (
                           <p className="text-red-400 font-bold flex items-center gap-1">
-                            ⚠️ Revisão Ultrapassada por {Math.abs(diff!).toLocaleString()} km!
+                            ⚠️ {t('portal_revision_overdue')} {Math.abs(diff!).toLocaleString()} km!
                           </p>
                         ) : (
                           <p className="text-neutral-300 font-bold">
-                            Restam {diff!.toLocaleString()} km para a revisão
+                            {diff!.toLocaleString()} km {t('portal_revision_remaining')}
                           </p>
                         )}
                       </div>
@@ -418,7 +412,7 @@ export default function CustomerPortalPage({ params }: { params: Promise<{ custo
           </div>
 
           <p className="text-[10px] font-bold text-neutral-400 tracking-wider uppercase">
-            GEARSHIFT AUTOMOTIVE • App do Cliente
+            GEARSHIFT AUTOMOTIVE • {t('portal_title')}
           </p>
         </footer>
       </div>

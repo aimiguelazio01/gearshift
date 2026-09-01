@@ -8,11 +8,14 @@ import { workOrders, customers, vehicles, users, parts, invoices, lifts } from '
 import { STATUS_COLORS } from '@/lib/utils';
 import { WORK_ORDER_STATUSES } from '@/lib/types';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
+import { translatePartName } from '@/lib/translations';
 import type { WorkOrder, Customer, Vehicle, User, Part, Lift } from '@/lib/types';
 
 export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { t, formatCurrency, formatDate, formatDateTime } = useLanguage();
+  const { t, lang, formatCurrency, formatDate, formatDateTime } = useLanguage();
+  const { isTechnician, permissions } = useAuth();
   const [wo, setWo] = useState<WorkOrder | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -37,7 +40,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
   useEffect(() => { reload(); }, [reload]);
 
   if (!wo) {
-    return <div className="text-center py-20 text-[var(--muted)]">Work order not found</div>;
+    return <div className="text-center py-20 text-[var(--muted)]">{t('wo_not_found')}</div>;
   }
 
   const totals = workOrders.getTotal(wo);
@@ -124,7 +127,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
         <Link href="/work-orders" className="hover:text-blue-400 transition-colors">{t('wo_title')}</Link>
         <span>›</span>
         <span className="text-[var(--foreground)]">
-          {vehicle ? `${vehicle.make} ${vehicle.model}` : 'Work Order'}
+          {vehicle ? `${vehicle.make} ${vehicle.model}` : t('wo_order_number')}
         </span>
       </div>
 
@@ -135,7 +138,8 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             const isActive = status === wo.status;
             const isPast = idx < currentIdx;
             const colors = STATUS_COLORS[status];
-            const translatedStatus = t(`status_${status.replace(/ /g, '_').replace(/\//g, '_')}` as any) || status;
+            const normalizedKey = status.toLowerCase().replace(/[\s/]+/g, '_');
+            const translatedStatus = t(`status_${normalizedKey}`) || t(`status_${status.replace(/ /g, '_').replace(/\//g, '_')}`) || status;
             return (
               <div key={status} className="flex items-center">
                 <div className={`
@@ -170,7 +174,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             </button>
           ) : nextStatus ? (
             <button onClick={advanceStatus} className="btn-primary text-xs">
-              {t('wo_move_to')} {t(`status_${nextStatus.replace(/ /g, '_').replace(/\//g, '_')}` as any) || nextStatus} →
+              {t('wo_move_to')} {t(`status_${nextStatus.toLowerCase().replace(/[\s/]+/g, '_')}`) || nextStatus} →
             </button>
           ) : null}
         </div>
@@ -217,10 +221,10 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Descrição</th>
-                  <th className="text-right">Horas</th>
-                  <th className="text-right">Taxa/h</th>
-                  <th className="text-right">Total</th>
+                  <th>{t('description')}</th>
+                  <th className="text-right">{t('hours')}</th>
+                  <th className="text-right">{t('rate')}</th>
+                  <th className="text-right">{t('total')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -239,7 +243,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                   </tr>
                 ))}
                 {wo.labor_lines.length === 0 && (
-                  <tr><td colSpan={5} className="text-center py-6 text-[var(--muted)] text-sm">Sem mão de obra adicionada</td></tr>
+                  <tr><td colSpan={5} className="text-center py-6 text-[var(--muted)] text-sm">{t('wo_no_labor')}</td></tr>
                 )}
               </tbody>
             </table>
@@ -254,10 +258,14 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Peça</th>
-                  <th className="text-right">Qtd</th>
-                  <th className="text-right">Preço Unit.</th>
-                  <th className="text-right">Total</th>
+                  <th>{t('parts_name')}</th>
+                  <th className="text-right">{t('quantity')}</th>
+                  {!isTechnician && (
+                    <>
+                      <th className="text-right">{t('parts_sale')}</th>
+                      <th className="text-right">{t('total')}</th>
+                    </>
+                  )}
                   <th></th>
                 </tr>
               </thead>
@@ -267,12 +275,16 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                   return (
                     <tr key={line.id}>
                       <td>
-                        <span className="text-sm font-medium">{part?.name || 'Unknown'}</span>
+                        <span className="text-sm font-medium">{part ? translatePartName(part.name, lang) : t('unknown')}</span>
                         <span className="text-xs text-[var(--muted)] ml-2">{part?.sku}</span>
                       </td>
                       <td className="text-right text-sm">{line.qty}</td>
-                      <td className="text-right text-sm">{formatCurrency(line.unit_price)}</td>
-                      <td className="text-right text-sm font-medium">{formatCurrency(line.qty * line.unit_price)}</td>
+                      {!isTechnician && (
+                        <>
+                          <td className="text-right text-sm">{formatCurrency(line.unit_price)}</td>
+                          <td className="text-right text-sm font-medium">{formatCurrency(line.qty * line.unit_price)}</td>
+                        </>
+                      )}
                       <td>
                         <button onClick={() => handleRemovePart(line.id)} className="p-1 rounded hover:bg-red-500/10 text-[var(--muted)] hover:text-red-400">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
@@ -282,7 +294,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                   );
                 })}
                 {wo.part_lines.length === 0 && (
-                  <tr><td colSpan={5} className="text-center py-6 text-[var(--muted)] text-sm">Sem peças adicionadas</td></tr>
+                  <tr><td colSpan={isTechnician ? 3 : 5} className="text-center py-6 text-[var(--muted)] text-sm">{t('wo_no_parts')}</td></tr>
                 )}
               </tbody>
             </table>
@@ -294,18 +306,18 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
           {/* Lift Assignment & Schedule Card */}
           <div className="card p-5 space-y-4">
             <h3 className="text-sm font-semibold flex items-center justify-between">
-              <span>Elevador & Agendamento</span>
-              <Link href="/lifts" className="text-xs text-blue-400 hover:text-blue-300 font-normal">Ver Elevadores →</Link>
+              <span>{t('wo_lift_assigned')}</span>
+              <Link href="/lifts" className="text-xs text-blue-400 hover:text-blue-300 font-normal">{t('lift_title')} →</Link>
             </h3>
 
             <div>
-              <label className="form-label text-xs">Atribuir Elevador</label>
+              <label className="form-label text-xs">{t('lift_assign')}</label>
               <select
                 value={wo.lift_id || ''}
                 onChange={e => handleLiftChange(e.target.value)}
                 className="w-full text-xs"
               >
-                <option value="">Nenhum (Sem Elevador)</option>
+                <option value="">{t('wo_no_lift')}</option>
                 {liftList.map(l => (
                   <option key={l.id} value={l.id}>{l.name} ({l.type})</option>
                 ))}
@@ -315,46 +327,62 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             {currentLift && (
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold flex items-center justify-between">
                 <span>🏗️ {currentLift.name}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20">Ativo</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20">{t('lift_occupied')}</span>
               </div>
             )}
             <div className="pt-2 border-t border-[var(--border)] text-xs space-y-2">
               <div className="text-[var(--muted)]">
-                <span className="text-[10px] text-purple-400 font-semibold uppercase tracking-wider block">📝 Data de Criação (Automática)</span>
+                <span className="text-[10px] text-purple-400 font-semibold uppercase tracking-wider block">📝 {t('wo_created_date')}</span>
                 <span className="font-mono text-[var(--foreground)]">{formatDateTime(wo.created_at)}</span>
               </div>
 
               <div className="pt-1">
-                <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider block">🔧 Data da Reparação (Manual)</span>
+                <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider block">🔧 {t('wo_repair_date')}</span>
                 {wo.scheduled_start ? (
                   <div className="font-mono text-[var(--foreground)] mt-0.5">
                     {wo.scheduled_start.replace('T', ' ')} ({wo.estimated_hours || 2}h)
                   </div>
                 ) : (
-                  <div className="text-[var(--muted)] italic mt-0.5">Nenhuma data de reparação definida.</div>
+                  <div className="text-[var(--muted)] italic mt-0.5">{t('wo_no_repair_date_set')}</div>
                 )}
               </div>
             </div>
           </div>
 
           {/* Totals */}
-          <div className="card p-5 space-y-3">
-            <h3 className="text-sm font-semibold">{t('wo_order_summary')}</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--muted)]">{t('wo_labor_total')}</span>
-                <span className="font-medium">{formatCurrency(totals.labor)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--muted)]">{t('wo_parts_total')}</span>
-                <span className="font-medium">{formatCurrency(totals.parts)}</span>
-              </div>
-              <div className="border-t border-[var(--border)] pt-2 flex justify-between">
-                <span className="font-semibold">{t('wo_subtotal')}</span>
-                <span className="text-lg font-bold text-[var(--foreground)]">{formatCurrency(totals.subtotal)}</span>
+          {!isTechnician ? (
+            <div className="card p-5 space-y-3">
+              <h3 className="text-sm font-semibold">{t('wo_order_summary')}</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-[var(--muted)]">{t('wo_labor_total')}</span>
+                  <span className="font-medium">{formatCurrency(totals.labor)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[var(--muted)]">{t('wo_parts_total')}</span>
+                  <span className="font-medium">{formatCurrency(totals.parts)}</span>
+                </div>
+                <div className="border-t border-[var(--border)] pt-2 flex justify-between">
+                  <span className="font-semibold">{t('wo_subtotal')}</span>
+                  <span className="text-lg font-bold text-[var(--foreground)]">{formatCurrency(totals.subtotal)}</span>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="card p-5 space-y-3">
+              <h3 className="text-sm font-semibold">{t('wo_order_summary')}</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-[var(--muted)]">{t('wo_labor_lines')}</span>
+                  <span className="font-semibold text-[var(--foreground)]">{wo.labor_lines.length} {t('wo_labor_lines').toLowerCase()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--muted)]">{t('wo_parts_used')}</span>
+                  <span className="font-semibold text-[var(--foreground)]">{wo.part_lines.reduce((s, l) => s + l.qty, 0)} {t('parts_units')}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Notes */}
           <div className="card p-5 space-y-4">
@@ -380,19 +408,19 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       </div>
 
       {/* Add Labor Modal */}
-      <Modal open={showLaborModal} onClose={() => setShowLaborModal(false)} title="Adicionar Mão de Obra">
+      <Modal open={showLaborModal} onClose={() => setShowLaborModal(false)} title={t('wo_add_labor')}>
         <form onSubmit={handleAddLabor} className="space-y-4">
           <div>
-            <label className="form-label">Descrição *</label>
+            <label className="form-label">{t('description')} *</label>
             <input type="text" name="description" required placeholder="ex: Mudança de óleo, inspeção" className="w-full" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="form-label">Horas *</label>
+              <label className="form-label">{t('hours')} *</label>
               <input type="number" name="hours" step="0.25" required defaultValue="1" className="w-full" />
             </div>
             <div>
-              <label className="form-label">Taxa (€/h) *</label>
+              <label className="form-label">{t('rate')} (€/h) *</label>
               <input type="number" name="rate" step="0.01" required defaultValue={tech?.hourly_rate || 75} className="w-full" />
             </div>
           </div>
@@ -404,21 +432,23 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
       </Modal>
 
       {/* Add Part Modal */}
-      <Modal open={showPartModal} onClose={() => setShowPartModal(false)} title="Adicionar Peça">
+      <Modal open={showPartModal} onClose={() => setShowPartModal(false)} title={t('wo_add_part')}>
         <form onSubmit={handleAddPart} className="space-y-4">
           <div>
-            <label className="form-label">Selecionar Peça *</label>
+            <label className="form-label">{t('wo_select_part')} *</label>
             <select name="part_id" required className="w-full">
-              <option value="">Escolher peça...</option>
+              <option value="">{t('wo_select_part')}</option>
               {partsList.filter(p => p.qty_on_hand > 0).map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.sku}) — {formatCurrency(p.sale_price)} — Stock: {p.qty_on_hand}
+                  {translatePartName(p.name, lang)} ({p.sku})
+                  {!isTechnician ? ` — ${formatCurrency(p.sale_price)}` : ''}
+                  {` — ${t('parts_stock')}: ${p.qty_on_hand}`}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="form-label">Quantidade *</label>
+            <label className="form-label">{t('quantity')} *</label>
             <input type="number" name="qty" min="1" required defaultValue="1" className="w-full" />
           </div>
           <div className="flex justify-end gap-3 pt-2">

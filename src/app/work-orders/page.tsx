@@ -5,14 +5,18 @@ import Link from 'next/link';
 import SearchBar from '@/components/SearchBar';
 import Modal from '@/components/Modal';
 import StatusBadge from '@/components/StatusBadge';
+import AdminLockModal from '@/components/AdminLockModal';
 import { workOrders, customers, vehicles, users, lifts } from '@/lib/store';
 import { matchesSearch, STATUS_COLORS } from '@/lib/utils';
 import { WORK_ORDER_STATUSES } from '@/lib/types';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import type { WorkOrder, Customer, Vehicle, Lift } from '@/lib/types';
 
 export default function WorkOrdersPage() {
-  const { t, formatCurrency, formatDate } = useLanguage();
+  const { t, lang, formatCurrency, formatDate } = useLanguage();
+  const { permissions, isAdmin, isTechnician, currentUser } = useAuth();
+
   const [list, setList] = useState<WorkOrder[]>([]);
   const [customerList, setCustomerList] = useState<Customer[]>([]);
   const [vehicleList, setVehicleList] = useState<Vehicle[]>([]);
@@ -21,6 +25,10 @@ export default function WorkOrdersPage() {
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [showModal, setShowModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState('');
+
+  // Admin / Advisor Lock Modal
+  const [showAuthLock, setShowAuthLock] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   const reload = useCallback(() => {
     setList(workOrders.getAll());
@@ -41,6 +49,15 @@ export default function WorkOrdersPage() {
       search
     );
   });
+
+  const handleOpenCreateModal = () => {
+    if (permissions.canCreateWorkOrders) {
+      setShowModal(true);
+    } else {
+      setPendingAction(() => () => setShowModal(true));
+      setShowAuthLock(true);
+    }
+  };
 
   const handleCreateWO = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -98,12 +115,27 @@ export default function WorkOrdersPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Role Notice Banner for Technicians */}
+      {isTechnician && (
+        <div className="p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/25 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="text-base">🔧</span>
+            <span className="text-cyan-300 font-medium">
+              {lang === 'pt'
+                ? `Perfil Técnico (${currentUser?.name}): Pode consultar ordens e alterar serviços (estados, peças e mão de obra). A criação de novas ordens é feita pela receção/administração.`
+                : `Technician Profile (${currentUser?.name}): You can inspect work orders and alter active jobs (statuses, parts & labor). Creating new work orders is done by reception/administration.`}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[var(--foreground)]">{t('wo_title')}</h1>
           <p className="text-sm text-[var(--muted)] mt-1">{list.length} {t('wo_total')}</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-center">
           {/* View Toggle */}
           <div className="flex rounded-xl overflow-hidden border border-[var(--border)]">
             <button
@@ -119,11 +151,17 @@ export default function WorkOrdersPage() {
               {t('wo_view_list')}
             </button>
           </div>
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
+
+          <button
+            className="btn-primary"
+            onClick={handleOpenCreateModal}
+            title={!permissions.canCreateWorkOrders ? (lang === 'pt' ? 'Apenas Administrativos e Administradores podem criar novas ordens' : 'Only Advisors and Admins can create work orders') : undefined}
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            {t('wo_add_button')}
+            <span>{t('wo_add_button')}</span>
+            {!permissions.canCreateWorkOrders && <span className="text-[10px] opacity-75">🔒</span>}
           </button>
         </div>
       </div>
@@ -136,7 +174,8 @@ export default function WorkOrdersPage() {
           {WORK_ORDER_STATUSES.map(status => {
             const statusWOs = filtered.filter(wo => wo.status === status);
             const colors = STATUS_COLORS[status];
-            const translatedStatus = t(`status_${status.replace(/ /g, '_').replace(/\//g, '_')}` as any) || status;
+            const normalizedStatusKey = status.toLowerCase().replace(/[\s/]+/g, '_');
+            const translatedStatus = t(`status_${normalizedStatusKey}`) || t(`status_${status.replace(/ /g, '_').replace(/\//g, '_')}`) || status;
             return (
               <div key={status} className="flex-shrink-0 w-72">
                 {/* Column Header */}
@@ -193,7 +232,7 @@ export default function WorkOrdersPage() {
                   })}
                   {statusWOs.length === 0 && (
                     <div className="text-center py-8 text-[var(--muted)] text-xs border border-dashed border-[var(--border)] rounded-xl">
-                      Sem ordens
+                      {t('wo_no_orders')}
                     </div>
                   )}
                 </div>
@@ -210,11 +249,11 @@ export default function WorkOrdersPage() {
                 <th>{t('inv_vehicle')}</th>
                 <th>{t('inv_customer')}</th>
                 <th>{t('inv_status')}</th>
-                <th>Elevador</th>
+                <th>{t('nav_lifts')}</th>
                 <th>{t('wo_technician')}</th>
-                <th>Descrição</th>
-                <th className="text-right">Total</th>
-                <th>Data</th>
+                <th>{t('description')}</th>
+                <th className="text-right">{t('total')}</th>
+                <th>{t('date')}</th>
               </tr>
             </thead>
             <tbody>
@@ -253,7 +292,7 @@ export default function WorkOrdersPage() {
         </div>
       )}
 
-      {/* Create Work Order Modal with Lift & Schedule Selection */}
+      {/* Create Work Order Modal */}
       <Modal open={showModal} onClose={() => { setShowModal(false); setSelectedCustomer(''); }} title={t('wo_add_button')} maxWidth="max-w-xl">
         <form onSubmit={handleCreateWO} className="space-y-4">
           <div>
@@ -263,7 +302,7 @@ export default function WorkOrdersPage() {
               onChange={e => setSelectedCustomer(e.target.value)}
               className="w-full"
             >
-              <option value="">Todos os clientes (Filtrar veículo)...</option>
+              <option value="">{t('cust_select_placeholder')}</option>
               {customerList.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -273,7 +312,7 @@ export default function WorkOrdersPage() {
           <div>
             <label className="form-label">{t('inv_vehicle')} *</label>
             <select name="vehicle_id" required className="w-full">
-              <option value="">Selecionar veículo...</option>
+              <option value="">{t('wo_select_vehicle')}</option>
               {customerVehicles.map(v => {
                 const owner = customerList.find(c => c.id === v.customer_id);
                 return (
@@ -296,9 +335,9 @@ export default function WorkOrdersPage() {
               </select>
             </div>
             <div>
-              <label className="form-label">Elevador (Oficina)</label>
+              <label className="form-label">{t('nav_lifts')}</label>
               <select name="lift_id" className="w-full">
-                <option value="">Nenhum (Sem Elevador)</option>
+                <option value="">{t('wo_no_lift')}</option>
                 {liftList.map(l => (
                   <option key={l.id} value={l.id}>{l.name}</option>
                 ))}
@@ -307,18 +346,18 @@ export default function WorkOrdersPage() {
           </div>
 
           <div className="p-3 rounded-xl bg-[var(--hover)] border border-[var(--border)] space-y-3">
-            <h4 className="text-xs font-bold text-[var(--foreground)] uppercase tracking-wider">Agendamento de Serviço</h4>
+            <h4 className="text-xs font-bold text-[var(--foreground)] uppercase tracking-wider">{t('wo_schedule_repair_time')}</h4>
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="form-label text-[11px]">Data</label>
+                <label className="form-label text-[11px]">{t('date')}</label>
                 <input type="date" name="scheduled_date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full text-xs" />
               </div>
               <div>
-                <label className="form-label text-[11px]">Hora Início</label>
+                <label className="form-label text-[11px]">{t('cal_start_time')}</label>
                 <input type="time" name="scheduled_time" defaultValue="09:00" className="w-full text-xs" />
               </div>
               <div>
-                <label className="form-label text-[11px]">Duração (h)</label>
+                <label className="form-label text-[11px]">{t('cal_est_hours')}</label>
                 <input type="number" name="estimated_hours" step="0.5" defaultValue="2" min="0.5" className="w-full text-xs" />
               </div>
             </div>
@@ -326,11 +365,11 @@ export default function WorkOrdersPage() {
 
           <div>
             <label className="form-label">{t('wo_customer_notes')}</label>
-            <textarea name="customer_notes" rows={2} placeholder="Descrição do serviço solicitado..." className="w-full" />
+            <textarea name="customer_notes" rows={2} placeholder={t('wo_customer_notes')} className="w-full" />
           </div>
           <div>
             <label className="form-label">{t('wo_internal_notes')}</label>
-            <textarea name="internal_notes" rows={2} placeholder="Observações internas..." className="w-full" />
+            <textarea name="internal_notes" rows={2} placeholder={t('wo_internal_notes')} className="w-full" />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" className="btn-secondary" onClick={() => { setShowModal(false); setSelectedCustomer(''); }}>{t('cancel')}</button>
@@ -338,6 +377,19 @@ export default function WorkOrdersPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Admin / Advisor Lock Modal */}
+      <AdminLockModal
+        open={showAuthLock}
+        onClose={() => { setShowAuthLock(false); setPendingAction(null); }}
+        actionTitle={lang === 'pt' ? 'Criar Nova Ordem de Serviço (Apenas Administrativo/Admin)' : 'Create New Work Order (Advisor/Admin Only)'}
+        onSuccess={() => {
+          if (pendingAction) {
+            pendingAction();
+            setPendingAction(null);
+          }
+        }}
+      />
     </div>
   );
 }

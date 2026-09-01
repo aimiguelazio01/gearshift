@@ -4,8 +4,10 @@ import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
 import Modal from '@/components/Modal';
 import StatusBadge from '@/components/StatusBadge';
+import AdminLockModal from '@/components/AdminLockModal';
 import { customers, vehicles, workOrders, settings } from '@/lib/store';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import { generateArduinoNFCCode } from '@/lib/nfcGenerator';
 import { slugify } from '@/lib/utils';
 import type { Customer, Vehicle, WorkOrder } from '@/lib/types';
@@ -13,19 +15,21 @@ import type { Customer, Vehicle, WorkOrder } from '@/lib/types';
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { t, lang, formatCurrency, formatDate } = useLanguage();
+  const { permissions, isTechnician } = useAuth();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [vehicleList, setVehicleList] = useState<Vehicle[]>([]);
   const [woList, setWoList] = useState<WorkOrder[]>([]);
 
   // Modals & Tabs
   const [showQRModal, setShowQRModal] = useState(false);
+  const [showAuthLock, setShowAuthLock] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [modalTab, setModalTab] = useState<'qr' | 'nfc' | 'arduino'>('qr');
   const [copied, setCopied] = useState(false);
   const [nfcStatus, setNfcStatus] = useState<string | null>(null);
 
   // Web Domain / Base URL configuration for NFC & QR Codes
   const [publicBaseUrl, setPublicBaseUrl] = useState<string>('');
-  const [domainSaved, setDomainSaved] = useState<boolean>(false);
 
   useEffect(() => {
     const saved = settings.get();
@@ -43,16 +47,6 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     }
   }, []);
 
-  const handleSaveDomain = () => {
-    if (publicBaseUrl) {
-      const normalizedUrl = publicBaseUrl.replace(/gearshift(?:-one|1)\.vercel\.app/, 'gearshift2.vercel.app');
-      settings.update({ publicBaseUrl: normalizedUrl });
-      setPublicBaseUrl(normalizedUrl);
-      setDomainSaved(true);
-      setTimeout(() => setDomainSaved(false), 2500);
-    }
-  };
-
   const reload = useCallback(() => {
     const cust = customers.getByIdOrSlug(id);
     if (cust) {
@@ -65,13 +59,12 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   useEffect(() => { reload(); }, [reload]);
 
   if (!customer) {
-    return <div className="text-center py-20 text-[var(--muted)]">Cliente não encontrado</div>;
+    return <div className="text-center py-20 text-[var(--muted)]">{t('cust_no_found')}</div>;
   }
 
   const customerSlug = slugify(customer.name);
   const cleanBaseUrl = (publicBaseUrl || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')).trim().replace(/\/$/, '');
   const portalUrl = `${cleanBaseUrl}/portal/${customerSlug}`;
-  const isLocalhostUrl = cleanBaseUrl.includes('localhost') || cleanBaseUrl.includes('127.0.0.1');
 
   const handleCopyLink = (textToCopy: string) => {
     navigator.clipboard.writeText(textToCopy);
@@ -80,8 +73,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   };
 
   // NFC Write Handler — Integrates direct Web Serial (Vercel HTTPS), Native Web NFC & local nfc_v01 Studio
+  const nfcPayloadUrl = portalUrl.replace(/^https?:\/\//i, '');
   const nfcStudioServer = (settings.get().nfcStudioUrl || 'http://localhost:3001').replace(/\/$/, '');
-  const nfcStudioAppUrl = `${nfcStudioServer}/?url=${encodeURIComponent(portalUrl)}&autowrite=true`;
+  const nfcStudioAppUrl = `${nfcStudioServer}/?url=${encodeURIComponent(nfcPayloadUrl)}&autowrite=true`;
 
   const openNFCStudio = () => {
     if (typeof window === 'undefined') return;
@@ -90,27 +84,24 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   const handleNFCStudioWrite = async () => {
     setNfcStatus(null);
-
-    // Open this during the user click so popup blocking does not prevent the
-    // local NFC Studio tab after an asynchronous USB/Web NFC attempt.
     openNFCStudio();
 
-    // 1. Web Serial API (Chrome/Edge over HTTPS on Vercel or Localhost)
     if (typeof window !== 'undefined' && 'serial' in navigator) {
       try {
-        setNfcStatus('🔌 Selecione a porta USB (COM4) na janela do navegador...');
+        setNfcStatus(lang === 'pt' ? '🔌 Selecione a porta USB (COM4) na janela do navegador...' : '🔌 Select the USB port in the browser window...');
         // @ts-ignore Web Serial API
         const port = await navigator.serial.requestPort();
         await port.open({ baudRate: 115200 });
 
-        setNfcStatus(`📲 Conectado à porta USB!\nA enviar URL: ${portalUrl}\n\n👉 ENCOSTE O CARTÃO NTAG215 no leitor PN532 agora!`);
+        setNfcStatus(lang === 'pt'
+          ? `📲 Conectado à porta USB!\nA enviar URL: ${nfcPayloadUrl}\n\n👉 ENCOSTE O CARTÃO NTAG215 no leitor PN532 agora!`
+          : `📲 Connected to USB port!\nSending URL: ${nfcPayloadUrl}\n\n👉 TAP NTAG215 CARD on PN532 reader now!`);
 
         const encoder = new TextEncoder();
         const writer = port.writable.getWriter();
-        await writer.write(encoder.encode(`WRITE:URL:${portalUrl}\n`));
+        await writer.write(encoder.encode(`WRITE:URL:${nfcPayloadUrl}\n`));
         writer.releaseLock();
 
-        // Listen for serial response asynchronously
         const textDecoder = new TextDecoderStream();
         port.readable.pipeTo(textDecoder.writable);
         const reader = textDecoder.readable.getReader();
@@ -119,7 +110,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         const timeout = setTimeout(async () => {
           try { await reader.cancel(); } catch {}
           try { await port.close(); } catch {}
-          setNfcStatus(`✅ Comando enviado para o Arduino!\nURL: ${portalUrl}\n\nEncoste o seu cartão NTAG215 no leitor PN532.`);
+          setNfcStatus(lang === 'pt'
+            ? `✅ Comando enviado para o Arduino!\nURL: ${nfcPayloadUrl}\n\nEncoste o seu cartão NTAG215 no leitor PN532.`
+            : `✅ Command sent to Arduino!\nURL: ${nfcPayloadUrl}\n\nTap your NTAG215 card on the reader.`);
         }, 8000);
 
         while (true) {
@@ -127,7 +120,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           if (done) break;
           buffer += value;
           if (buffer.includes('SUCCESS:WRITTEN') || buffer.includes('is fully updated') || buffer.includes('OK:SET_URL')) {
-            setNfcStatus(`✅ CARTÃO NFC GRAVADO COM SUCESSO!\nURL: ${portalUrl}`);
+            setNfcStatus(lang === 'pt'
+              ? `✅ CARTÃO NFC GRAVADO COM SUCESSO!\nURL: ${nfcPayloadUrl}`
+              : `✅ NFC CARD SUCCESSFULLY WRITTEN!\nURL: ${nfcPayloadUrl}`);
             clearTimeout(timeout);
             try { await reader.cancel(); } catch {}
             try { await port.close(); } catch {}
@@ -137,54 +132,55 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         return;
       } catch (err: any) {
         if (err.name === 'NotFoundError') {
-          setNfcStatus('ℹ️ Seleção de porta USB cancelada.');
+          setNfcStatus(lang === 'pt' ? 'ℹ️ Seleção de porta USB cancelada.' : 'ℹ️ USB port selection cancelled.');
           return;
         }
-        // Fallback to next methods if Web Serial fails
       }
     }
 
-    // 2. Native Web NFC API (Android Chrome)
     if (typeof window !== 'undefined' && 'NDEFReader' in window) {
       try {
         // @ts-ignore Web NFC API
         const ndef = new NDEFReader();
         await ndef.write({
-          records: [{ recordType: 'url', data: portalUrl }]
+          records: [{ recordType: 'url', data: `http://${nfcPayloadUrl}` }]
         });
-        setNfcStatus(`✅ Cartão NFC gravado com sucesso via Web NFC:\n${portalUrl}`);
+        setNfcStatus(lang === 'pt'
+          ? `✅ Cartão NFC gravado com sucesso via Web NFC:\n${nfcPayloadUrl}`
+          : `✅ NFC card written successfully via Web NFC:\n${nfcPayloadUrl}`);
         return;
-      } catch (err: any) {
-        // Handled gracefully
-      }
+      } catch (err: any) {}
     }
 
-    // 3. Try reaching local nfc_v01 server via API (if on localhost)
     try {
       const res = await fetch(`${nfcStudioServer}/api/update-ino`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payload: portalUrl, type: 'URL' }),
+        body: JSON.stringify({ payload: nfcPayloadUrl, type: 'URL' }),
       });
       const data = await res.json();
       if (data.success) {
-        setNfcStatus(`✅ URL enviada para o leitor PN532 (${portalUrl})! A compilar sketch Arduino...`);
+        setNfcStatus(lang === 'pt'
+          ? `✅ URL enviada para o leitor PN532 (${nfcPayloadUrl})! A compilar sketch Arduino...`
+          : `✅ URL sent to PN532 (${nfcPayloadUrl})! Compiling Arduino sketch...`);
         fetch(`${nfcStudioServer}/api/upload`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         }).then(r => r.json()).then(uploadData => {
           if (uploadData.success) {
-            setNfcStatus(`👉 CÓDIGO CARREGADO NO ARDUINO! Encoste o seu cartão NTAG215 ao leitor PN532!`);
+            setNfcStatus(lang === 'pt'
+              ? `👉 CÓDIGO CARREGADO NO ARDUINO! Encoste o seu cartão NTAG215 ao leitor PN532!`
+              : `👉 CODE UPLOADED TO ARDUINO! Tap your NTAG215 card to the PN532 reader!`);
           }
-        }).catch(() => { });
+        }).catch(() => {});
         return;
       }
-    } catch (err: any) {
-      // HTTPS→HTTP fetch blocked by browser — expected when on Vercel
-    }
+    } catch (err: any) {}
 
-    setNfcStatus(`ℹ️ URL pronta a gravar: ${portalUrl}\n\n⚠️ O servidor Arduino local (${nfcStudioServer}) não está ativo nesta máquina.\n\n👉 Execute "Write-NFC-Card.bat" (ou abra "NFC-Card-Writer.exe") e tente novamente.`);
+    setNfcStatus(lang === 'pt'
+      ? `ℹ️ URL pronta a gravar: ${nfcPayloadUrl}\n\n⚠️ O servidor Arduino local (${nfcStudioServer}) não está ativo nesta máquina.\n\n👉 Execute "Write-NFC-Card.bat" (ou abra "NFC-Card-Writer.exe") e tente novamente.`
+      : `ℹ️ URL ready to write: ${nfcPayloadUrl}\n\n⚠️ The local Arduino server (${nfcStudioServer}) is not active on this machine.\n\n👉 Run "Write-NFC-Card.bat" and try again.`);
   };
 
   const qrCodeImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(portalUrl)}`;
@@ -228,14 +224,23 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           {/* Generate Mobile App & NFC Access Button */}
           <div className="shrink-0">
             <button
-              onClick={() => setShowQRModal(true)}
+              onClick={() => {
+                if (permissions.canManageCustomersAndVehicles) {
+                  setShowQRModal(true);
+                } else {
+                  setPendingAction(() => () => setShowQRModal(true));
+                  setShowAuthLock(true);
+                }
+              }}
               className="btn-primary text-xs flex items-center gap-2 py-2.5 px-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-lg shadow-blue-500/20"
+              title={!permissions.canManageCustomersAndVehicles ? (lang === 'pt' ? 'Apenas Administrativos e Administradores podem gerar a app do cliente' : 'Only Advisors and Admins can generate client app') : undefined}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
                 <line x1="12" y1="18" x2="12.01" y2="18" />
               </svg>
-              <span>{t('portal_generate_app')} / NFC</span>
+              <span>{t('portal_generate_app')}</span>
+              {!permissions.canManageCustomersAndVehicles && <span className="text-[10px] opacity-75">🔒</span>}
             </button>
           </div>
         </div>
@@ -249,15 +254,13 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           </div>
           <div>
             <h3 className="font-bold text-sm text-[var(--foreground)]">{t('portal_title')} — {customer.name}</h3>
-            <p className="text-xs text-[var(--muted)] mt-0.5">
-              Estado da reparação em tempo real, quilómetros para a próxima revisão e contactos diretos.
-            </p>
+            <p className="text-xs text-[var(--muted)] mt-0.5">{t('portal_subtitle')}</p>
           </div>
         </div>
 
         <div className="flex gap-2 shrink-0">
           <button onClick={() => handleCopyLink(portalUrl)} className="btn-secondary text-xs">
-            {copied ? '✓ Copiado!' : t('portal_copy_link')}
+            {copied ? (lang === 'pt' ? '✓ Copiado!' : '✓ Copied!') : t('portal_copy_link')}
           </button>
           <a href={`/portal/${customerSlug}`} target="_blank" rel="noopener noreferrer" className="btn-primary text-xs flex items-center gap-1">
             <span>{t('portal_open_app')}</span>
@@ -280,7 +283,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   <p className="text-xs text-[var(--muted)]">{v.plate} • {v.color} • {v.mileage.toLocaleString()} km</p>
                   {v.next_service_mileage && (
                     <span className="text-[10px] text-emerald-400 font-semibold mt-1 block">
-                      Próxima Revisão: {v.next_service_mileage.toLocaleString()} km
+                      {t('veh_next_service')}: {v.next_service_mileage.toLocaleString()} km
                     </span>
                   )}
                 </div>
@@ -290,7 +293,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               </Link>
             ))}
             {vehicleList.length === 0 && (
-              <p className="text-center py-8 text-sm text-[var(--muted)]">Nenhum veículo registado</p>
+              <p className="text-center py-8 text-sm text-[var(--muted)]">{t('veh_no_found')}</p>
             )}
           </div>
         </div>
@@ -309,7 +312,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-[var(--foreground)]">
-                        {vehicle ? `${vehicle.make} ${vehicle.model}` : 'Desconhecido'}
+                        {vehicle ? `${vehicle.make} ${vehicle.model}` : t('unknown')}
                       </p>
                       <p className="text-xs text-[var(--muted)] mt-0.5">{wo.customer_notes.slice(0, 60)}{wo.customer_notes.length > 60 ? '...' : ''}</p>
                     </div>
@@ -323,7 +326,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               );
             })}
             {woList.length === 0 && (
-              <p className="text-center py-8 text-sm text-[var(--muted)]">Sem histórico de serviço</p>
+              <p className="text-center py-8 text-sm text-[var(--muted)]">{t('veh_no_history')}</p>
             )}
           </div>
         </div>
@@ -332,7 +335,6 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       {/* QR Code & NFC Access Modal */}
       <Modal open={showQRModal} onClose={() => setShowQRModal(false)} title={t('nfc_modal_title')} maxWidth="max-w-xl">
         <div className="space-y-4">
-          {/* Modal Tabs — GEARSHIFT Chrome Metallic Design */}
           <div className="grid grid-cols-3 gap-2 p-1.5 rounded-2xl bg-neutral-950 border border-neutral-800">
             <button
               onClick={() => setModalTab('qr')}
@@ -413,11 +415,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             </div>
           )}
 
-          {/* TAB 2: WEB NFC DIRECT WRITE — GEARSHIFT METALLIC DESIGN */}
+          {/* TAB 2: WEB NFC DIRECT WRITE */}
           {modalTab === 'nfc' && (
             <div className="space-y-4 py-2 text-center animate-fade-in">
               <div className="p-6 rounded-2xl bg-gradient-to-b from-neutral-900 via-neutral-950 to-black border border-neutral-700/80 shadow-2xl space-y-4">
-                {/* Vector NFC Wave Antenna Chip Badge */}
                 <div className="w-16 h-16 mx-auto rounded-2xl bg-neutral-950 border border-neutral-700 flex items-center justify-center shadow-xl shadow-black relative group">
                   <div className="absolute inset-0 rounded-2xl bg-white/5 animate-ping opacity-60" />
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-white relative z-10">
@@ -436,7 +437,6 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 </div>
 
                 <div className="flex flex-col items-center justify-center gap-3 pt-2">
-                  {/* PRIMARY ACTION: Direct Web Serial USB connection in browser */}
                   <button
                     onClick={handleNFCStudioWrite}
                     className="btn-primary w-full text-xs py-3.5 px-6 font-black shadow-xl active:scale-95 transition-all duration-200 inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl text-white cursor-pointer"
@@ -444,22 +444,20 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2v6m0 0l-3-3m3 3l3-3M6 12a6 6 0 1012 0 6 6 0 00-12 0z"/>
                     </svg>
-                    <span>⚡ Conectar Arduino USB &amp; Gravar Cartão</span>
+                    <span>{t('nfc_tap_and_write')}</span>
                   </button>
 
-                  {/* SECONDARY ACTION: Open standalone NFC Studio on port 3001 */}
                   <a
                     href={nfcStudioAppUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-secondary w-full text-[11px] py-2.5 px-4 font-semibold shadow-md active:scale-95 transition-all inline-flex items-center justify-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-600 rounded-lg no-underline"
                   >
-                    <span>🔗 Abrir NFC Studio Studio Local (localhost:3001)</span>
+                    <span>🔗 NFC Studio (localhost:3001)</span>
                     <span>↗</span>
                   </a>
                 </div>
 
-                {/* Show the exact URL being written */}
                 <div className="p-2.5 rounded-lg bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-400 font-mono truncate text-center mt-2">
                   {portalUrl}
                 </div>
@@ -468,15 +466,6 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               {nfcStatus && (
                 <div className="p-3.5 rounded-xl bg-neutral-900 border border-neutral-700 text-xs text-left text-neutral-200 font-mono font-semibold space-y-2">
                   <p className="whitespace-pre-wrap">{nfcStatus}</p>
-                  <a
-                    href={nfcStudioAppUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-secondary text-[11px] py-1.5 px-3 inline-flex items-center gap-1 bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 rounded-lg no-underline"
-                  >
-                    <span>🔗 Abrir NFC Studio (localhost:3001)</span>
-                    <span>↗</span>
-                  </a>
                 </div>
               )}
             </div>
@@ -487,11 +476,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             <div className="space-y-3 py-2 text-left animate-fade-in">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-bold text-sm text-[var(--foreground)]">Código Sketch Arduino PN532</h3>
-                  <p className="text-xs text-[var(--muted)]">Código C++ pronto a compilar para gravar este cartão NTAG215 específico.</p>
+                  <h3 className="font-bold text-sm text-[var(--foreground)]">{t('nfc_arduino_title')}</h3>
+                  <p className="text-xs text-[var(--muted)]">{t('nfc_arduino_desc')}</p>
                 </div>
                 <button onClick={() => handleCopyLink(arduinoSketch)} className="btn-secondary text-xs">
-                  {copied ? '✓ Código Copiado!' : 'Copiar Código C++'}
+                  {copied ? (lang === 'pt' ? '✓ Copiado!' : '✓ Copied!') : (lang === 'pt' ? 'Copiar Código C++' : 'Copy C++ Code')}
                 </button>
               </div>
 
@@ -504,7 +493,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           {/* Modal Footer */}
           <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
             <button className="btn-secondary text-xs" onClick={() => setShowQRModal(false)}>
-              Fechar
+              {t('btn_close')}
             </button>
             <a
               href={portalUrl}
@@ -512,12 +501,25 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               rel="noopener noreferrer"
               className="btn-primary text-xs flex items-center gap-1"
             >
-              <span>Abrir App do Cliente</span>
+              <span>{t('portal_open_app')}</span>
               <span>↗</span>
             </a>
           </div>
         </div>
       </Modal>
+
+      {/* Auth Lock Modal */}
+      <AdminLockModal
+        open={showAuthLock}
+        onClose={() => { setShowAuthLock(false); setPendingAction(null); }}
+        actionTitle={lang === 'pt' ? 'Gerar Aplicação Móvel & NFC (Apenas Administrativo/Admin)' : 'Generate Mobile App & NFC (Advisor/Admin Only)'}
+        onSuccess={() => {
+          if (pendingAction) {
+            pendingAction();
+            setPendingAction(null);
+          }
+        }}
+      />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
-
+import { useAuth } from '@/context/AuthContext';
 import { exportBackupToXLS, importBackupFromXLS } from '@/lib/backupManager';
 
 export default function Sidebar() {
@@ -13,6 +13,7 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toast, setToast] = useState<{ msg: string; isError?: boolean } | null>(null);
   const { lang, setLang, t } = useLanguage();
+  const { currentUser, usersList, switchUser, isAdmin, isTechnician } = useAuth();
 
   const handleExport = () => {
     const ok = exportBackupToXLS();
@@ -42,7 +43,8 @@ export default function Sidebar() {
     { href: '/work-orders', label: t('nav_work_orders'), icon: WorkOrdersIcon },
     { href: '/lifts', label: t('nav_lifts'), icon: LiftsIcon },
     { href: '/calendar', label: t('nav_calendar'), icon: CalendarIcon },
-    { href: '/invoices', label: t('nav_invoices'), icon: InvoicesIcon },
+    ...(isAdmin ? [{ href: '/team', label: t('nav_team'), icon: TeamIcon }] : []),
+    ...(!isTechnician ? [{ href: '/invoices', label: t('nav_invoices'), icon: InvoicesIcon }] : []),
   ];
 
   return (
@@ -194,8 +196,44 @@ export default function Sidebar() {
           )}
         </div>
 
+        {/* Active User / Profile Card */}
+        <div className="p-3 border-t border-neutral-800 shrink-0 bg-neutral-950/70">
+          {!collapsed ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] text-neutral-400 font-bold uppercase tracking-wider px-1">
+                <span>{lang === 'pt' ? 'Utilizador Ativo' : 'Active User'}</span>
+                {isAdmin && <span className="text-amber-400 flex items-center gap-1 font-bold">👑 Admin</span>}
+              </div>
+              <div className="relative">
+                <select
+                  value={currentUser?.id || ''}
+                  onChange={e => switchUser(e.target.value)}
+                  className="w-full text-xs py-2 px-2.5 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 font-medium focus:ring-1 focus:ring-amber-500/50 cursor-pointer"
+                >
+                  {usersList.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.role === 'Admin' ? '👑 ' : u.role === 'Technician' ? '🔧 ' : '📋 '}
+                      {u.name} ({u.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-center" title={`${currentUser?.name || ''} (${currentUser?.role || ''})`}>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+                isAdmin
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'bg-neutral-800 text-neutral-300 border border-neutral-700'
+              }`}>
+                {isAdmin ? '👑' : currentUser?.name?.charAt(0) || '👤'}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Language Switcher */}
-        <div className="p-3.5 border-t border-neutral-800 shrink-0 bg-neutral-950">
+        <div className="p-3 border-t border-neutral-800 shrink-0 bg-neutral-950">
           <div className={`flex items-center gap-1.5 p-1 rounded-xl bg-neutral-900 border border-neutral-800 ${collapsed ? 'flex-col' : ''}`}>
             <button
               onClick={() => setLang('pt')}
@@ -330,3 +368,15 @@ function CalendarIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+function TeamIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+

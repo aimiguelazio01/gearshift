@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { seedIfNeeded } from '@/lib/store';
 import { LanguageProvider } from '@/context/LanguageContext';
+import { AuthProvider } from '@/context/AuthContext';
 
 export default function AppProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -23,5 +24,11 @@ export default function AppProvider({ children }: { children: React.ReactNode })
     );
   }
 
-  return <LanguageProvider>{children}</LanguageProvider>;
+  return (
+    <LanguageProvider>
+      <AuthProvider>
+        {children}
+      </AuthProvider>
+    </LanguageProvider>
+  );
 }

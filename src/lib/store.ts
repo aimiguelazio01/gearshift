@@ -160,6 +160,61 @@ export const parts = {
 };
 
 // ══════════════════════════════════════════════
+// PUBLIC API — Part Categories
+// ══════════════════════════════════════════════
+const DEFAULT_PART_CATEGORIES = [
+  'Travões',
+  'Filtros',
+  'Fluidos & Lubrificantes',
+  'Motor & Correias',
+  'Suspensão & Direção',
+  'Eletricidade & Ignição',
+  'Climatização',
+  'Carroçaria',
+  'Pneus',
+  'Escape & Emissões',
+  'Transmissão & Embraiagem',
+  'Outros',
+];
+
+export const partCategories = {
+  getAll: (): string[] => {
+    if (typeof window === 'undefined') return DEFAULT_PART_CATEGORIES;
+    const raw = localStorage.getItem('workshop_part_categories');
+    if (!raw) {
+      const fromParts = getAll<Part>(KEYS.parts).map(p => p.category);
+      const combined = Array.from(new Set([...DEFAULT_PART_CATEGORIES, ...fromParts].filter(Boolean)));
+      localStorage.setItem('workshop_part_categories', JSON.stringify(combined));
+      return combined;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_PART_CATEGORIES;
+    } catch {
+      return DEFAULT_PART_CATEGORIES;
+    }
+  },
+  create: (name: string): string[] => {
+    const current = partCategories.getAll();
+    const trimmed = name.trim();
+    if (!trimmed || current.includes(trimmed)) return current;
+    const updated = [...current, trimmed];
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('workshop_part_categories', JSON.stringify(updated));
+    }
+    return updated;
+  },
+  delete: (name: string): string[] => {
+    const current = partCategories.getAll();
+    const updated = current.filter(c => c !== name);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('workshop_part_categories', JSON.stringify(updated));
+    }
+    return updated;
+  },
+};
+
+// ══════════════════════════════════════════════
 // PUBLIC API — Stock Movements
 // ══════════════════════════════════════════════
 export const stockMovements = {
@@ -307,7 +362,18 @@ export const invoices = {
 export const users = {
   getAll: () => getAll<User>(KEYS.users),
   getById: (id: string) => getById<User>(KEYS.users, id),
-  getTechnicians: () => getAll<User>(KEYS.users).filter((u) => u.role === 'Technician'),
+  getTechnicians: () => getAll<User>(KEYS.users).filter((u) => u.role === 'Technician' && u.active !== false),
+  create: (user: Omit<User, 'id'>) => create<User>(KEYS.users, { ...user, id: generateId(), active: user.active !== false }),
+  update: (id: string, data: Partial<User>) => update<User>(KEYS.users, id, data),
+  delete: (id: string) => {
+    const allWOs = getAll<WorkOrder>(KEYS.workOrders);
+    allWOs.forEach(wo => {
+      if (wo.assigned_technician_id === id) {
+        update<WorkOrder>(KEYS.workOrders, wo.id, { assigned_technician_id: '' });
+      }
+    });
+    return remove<User>(KEYS.users, id);
+  },
 };
 
 // ══════════════════════════════════════════════
@@ -321,17 +387,30 @@ const DEFAULT_LIFTS: Lift[] = [
 
 export const lifts = {
   getAll: (): Lift[] => {
-    const list = getAll<Lift>(KEYS.lifts);
-    if (!list || list.length === 0) {
+    if (typeof window === 'undefined') return DEFAULT_LIFTS;
+    const raw = localStorage.getItem(KEYS.lifts);
+    if (raw === null) {
       saveAll(KEYS.lifts, DEFAULT_LIFTS);
       return DEFAULT_LIFTS;
     }
-    return list;
+    try {
+      return JSON.parse(raw) as Lift[];
+    } catch {
+      return [];
+    }
   },
   getById: (id: string) => lifts.getAll().find((item) => item.id === id),
   create: (lift: Omit<Lift, 'id'>) => create<Lift>(KEYS.lifts, { ...lift, id: generateId() }),
   update: (id: string, data: Partial<Lift>) => update<Lift>(KEYS.lifts, id, data),
-  delete: (id: string) => remove<Lift>(KEYS.lifts, id),
+  delete: (id: string) => {
+    const allWOs = getAll<WorkOrder>(KEYS.workOrders);
+    allWOs.forEach(wo => {
+      if (wo.lift_id === id) {
+        update<WorkOrder>(KEYS.workOrders, wo.id, { lift_id: null });
+      }
+    });
+    return remove<Lift>(KEYS.lifts, id);
+  },
   assignWorkOrder: (liftId: string, workOrderId: string | null) => {
     const lift = lifts.getById(liftId);
     if (!lift) return;
@@ -379,16 +458,16 @@ export function seedIfNeeded(): void {
 
   // ── Parts ──
   const partsList: Part[] = [
-    { id: 'p1', sku: 'BRK-PAD-001', name: 'Ceramic Brake Pads (Front)', description: 'Premium ceramic front brake pad set', category: 'Brakes', supplier_id: 's2', cost_price: 35, sale_price: 75, qty_on_hand: 24, reorder_threshold: 8, location: 'A1-02' },
-    { id: 'p2', sku: 'BRK-ROT-001', name: 'Brake Rotor (Front)', description: 'Ventilated front brake rotor', category: 'Brakes', supplier_id: 's2', cost_price: 45, sale_price: 95, qty_on_hand: 12, reorder_threshold: 4, location: 'A1-03' },
-    { id: 'p3', sku: 'FLT-OIL-001', name: 'Oil Filter', description: 'Standard spin-on oil filter', category: 'Filters', supplier_id: 's3', cost_price: 5, sale_price: 15, qty_on_hand: 50, reorder_threshold: 15, location: 'B2-01' },
-    { id: 'p4', sku: 'FLT-AIR-001', name: 'Air Filter', description: 'Engine air filter element', category: 'Filters', supplier_id: 's3', cost_price: 8, sale_price: 22, qty_on_hand: 30, reorder_threshold: 10, location: 'B2-02' },
-    { id: 'p5', sku: 'FLD-OIL-5W30', name: 'Synthetic Oil 5W-30 (5L)', description: 'Full synthetic engine oil 5W-30, 5 liter jug', category: 'Fluids & Lubricants', supplier_id: 's1', cost_price: 22, sale_price: 45, qty_on_hand: 18, reorder_threshold: 6, location: 'C1-01' },
-    { id: 'p6', sku: 'ENG-SPK-001', name: 'Spark Plug (Iridium)', description: 'Long-life iridium spark plug', category: 'Engine', supplier_id: 's1', cost_price: 8, sale_price: 18, qty_on_hand: 40, reorder_threshold: 12, location: 'A3-01' },
-    { id: 'p7', sku: 'SUS-STRUT-F', name: 'Front Strut Assembly', description: 'Complete front strut with spring', category: 'Suspension', supplier_id: 's1', cost_price: 120, sale_price: 250, qty_on_hand: 6, reorder_threshold: 2, location: 'D1-01' },
-    { id: 'p8', sku: 'BLT-SERP-001', name: 'Serpentine Belt', description: 'Multi-rib serpentine drive belt', category: 'Belts & Hoses', supplier_id: 's1', cost_price: 18, sale_price: 42, qty_on_hand: 3, reorder_threshold: 4, location: 'B3-02' },
-    { id: 'p9', sku: 'CLG-THERM-01', name: 'Thermostat', description: 'Engine coolant thermostat', category: 'Cooling', supplier_id: 's1', cost_price: 12, sale_price: 35, qty_on_hand: 8, reorder_threshold: 3, location: 'A2-04' },
-    { id: 'p10', sku: 'ELC-BAT-001', name: 'Car Battery 12V 60Ah', description: 'Maintenance-free lead-acid battery', category: 'Electrical', supplier_id: 's1', cost_price: 80, sale_price: 160, qty_on_hand: 5, reorder_threshold: 2, location: 'D2-01' },
+    { id: 'p1', sku: 'BRK-PAD-001', name: 'Pastilhas de Travão Cerâmicas (Frente)', description: 'Jogo de pastilhas de travão dianteiras cerâmicas premium', category: 'Travões', supplier_id: 's2', cost_price: 35, sale_price: 75, qty_on_hand: 24, reorder_threshold: 8, location: 'A1-02' },
+    { id: 'p2', sku: 'BRK-ROT-001', name: 'Disco de Travão (Frente)', description: 'Disco de travão dianteiro ventilado', category: 'Travões', supplier_id: 's2', cost_price: 45, sale_price: 95, qty_on_hand: 12, reorder_threshold: 4, location: 'A1-03' },
+    { id: 'p3', sku: 'FLT-OIL-001', name: 'Filtro de Óleo', description: 'Filtro de óleo blindado padrão', category: 'Filtros', supplier_id: 's3', cost_price: 5, sale_price: 15, qty_on_hand: 50, reorder_threshold: 15, location: 'B2-01' },
+    { id: 'p4', sku: 'FLT-AIR-001', name: 'Filtro de Ar', description: 'Elemento filtrante de ar do motor', category: 'Filtros', supplier_id: 's3', cost_price: 8, sale_price: 22, qty_on_hand: 30, reorder_threshold: 10, location: 'B2-02' },
+    { id: 'p5', sku: 'FLD-OIL-5W30', name: 'Óleo Sintético 5W-30 (5L)', description: 'Óleo de motor 100% sintético 5W-30, embalagem de 5 litros', category: 'Fluidos & Lubrificantes', supplier_id: 's1', cost_price: 22, sale_price: 45, qty_on_hand: 18, reorder_threshold: 6, location: 'C1-01' },
+    { id: 'p6', sku: 'ENG-SPK-001', name: 'Vela de Ignição (Irídio)', description: 'Vela de ignição de longa duração em irídio', category: 'Motor', supplier_id: 's1', cost_price: 8, sale_price: 18, qty_on_hand: 40, reorder_threshold: 12, location: 'A3-01' },
+    { id: 'p7', sku: 'SUS-STRUT-F', name: 'Amortecedor Dianteiro Completo', description: 'Conjunto completo de amortecedor dianteiro com mola', category: 'Suspensão', supplier_id: 's1', cost_price: 120, sale_price: 250, qty_on_hand: 6, reorder_threshold: 2, location: 'D1-01' },
+    { id: 'p8', sku: 'BLT-SERP-001', name: 'Correia de Acessórios (Poly-V)', description: 'Correia estriada Poly-V para acessórios', category: 'Correias & Tubos', supplier_id: 's1', cost_price: 18, sale_price: 42, qty_on_hand: 3, reorder_threshold: 4, location: 'B3-02' },
+    { id: 'p9', sku: 'CLG-THERM-01', name: 'Termóstato do Motor', description: 'Termóstato de refrigeração do motor', category: 'Refrigeração', supplier_id: 's1', cost_price: 12, sale_price: 35, qty_on_hand: 8, reorder_threshold: 3, location: 'A2-04' },
+    { id: 'p10', sku: 'ELC-BAT-001', name: 'Bateria Automóvel 12V 60Ah', description: 'Bateria de arranque sem manutenção 12V 60Ah', category: 'Eletricidade', supplier_id: 's1', cost_price: 80, sale_price: 160, qty_on_hand: 5, reorder_threshold: 2, location: 'D2-01' },
   ];
   saveAll(KEYS.parts, partsList);
 

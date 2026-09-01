@@ -13,23 +13,25 @@ interface StatusBadgeProps {
 export default function StatusBadge({ status, type = 'workOrder', size = 'md' }: StatusBadgeProps) {
   const { t } = useLanguage();
   const colors = type === 'invoice'
-    ? INVOICE_STATUS_COLORS[status as InvoiceStatus]
-    : STATUS_COLORS[status as WorkOrderStatus];
+    ? (INVOICE_STATUS_COLORS[status as InvoiceStatus] || { bg: 'bg-neutral-800', text: 'text-neutral-300' })
+    : (STATUS_COLORS[status as WorkOrderStatus] || { bg: 'bg-neutral-800', text: 'text-neutral-300', border: 'border-neutral-700' });
 
   const sizeClasses = size === 'sm' ? 'text-[10px] px-2 py-0.5' : 'text-xs px-2.5 py-1';
   
+  const normalizedKey = status.toLowerCase().replace(/[\s/]+/g, '_');
   const translationKey = type === 'invoice'
-    ? (`invoice_${status}` as any)
-    : (`status_${status.replace(/ /g, '_').replace(/\//g, '_')}` as any);
+    ? `invoice_${normalizedKey}`
+    : `status_${normalizedKey}`;
 
-  const displayLabel = t(translationKey) || status;
+  const translated = t(translationKey);
+  const displayLabel = translated !== translationKey ? translated : (t(`status_${status.replace(/[\s/]+/g, '_')}`) || status);
 
   return (
     <span
       className={`
         inline-flex items-center rounded-full font-semibold tracking-wide
         ${colors.bg} ${colors.text}
-        ${type === 'workOrder' ? (STATUS_COLORS[status as WorkOrderStatus]?.border || '') + ' border' : ''}
+        ${type === 'workOrder' ? ((colors as any)?.border || '') + ' border' : ''}
         ${sizeClasses}
       `}
     >

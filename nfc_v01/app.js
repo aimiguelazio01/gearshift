@@ -215,25 +215,11 @@ function updateVisualizer() {
   const bytes = [];
 
   if (activeType === 'URL') {
-    let prefixCode = 0x04; // Default to https:// scheme
+    let prefixCode = 0x03; // Match the known-good http:// URI profile.
     let cleanData = rawData;
 
-    if (rawData.startsWith('https://www.')) {
-      prefixCode = 0x02;
-      cleanData = rawData.substring(12);
-    } else if (rawData.startsWith('http://www.')) {
-      prefixCode = 0x01;
-      cleanData = rawData.substring(11);
-    } else if (rawData.startsWith('https://')) {
-      prefixCode = 0x04;
-      cleanData = rawData.substring(8);
-    } else if (rawData.startsWith('http://')) {
-      prefixCode = 0x03;
-      cleanData = rawData.substring(7);
-    } else {
-      prefixCode = 0x04;
-      cleanData = rawData;
-    }
+    if (rawData.startsWith('https://')) cleanData = rawData.substring(8);
+    else if (rawData.startsWith('http://')) cleanData = rawData.substring(7);
 
     const uriLen = cleanData.length;
     const recordPayloadLen = 1 + uriLen;
@@ -506,19 +492,13 @@ function handleWriteCommand() {
     return;
   }
 
-  // Auto-prepend https:// for URL type if no scheme is present
-  if (activeType === 'URL' && !data.match(/^https?:\/\//i)) {
-    data = 'https://' + data;
-    payloadInput.value = data;
-    updateVisualizer();
-  }
-
   // NFC cards must contain a public customer portal URL. Prevent the old
   // localhost defaults (or previous Vercel domains) from being written.
   if (activeType === 'URL') {
     data = data
-      .replace(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?/i, 'https://gearshift2.vercel.app')
-      .replace(/gearshift(?:-one|1)\.vercel\.app/i, 'gearshift2.vercel.app');
+      .replace(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?/i, 'gearshift2.vercel.app')
+      .replace(/gearshift(?:-one|1)\.vercel\.app/i, 'gearshift2.vercel.app')
+      .replace(/^https?:\/\//i, '');
     payloadInput.value = data;
     updateVisualizer();
   }

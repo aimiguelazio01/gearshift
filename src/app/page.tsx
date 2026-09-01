@@ -6,10 +6,11 @@ import KPICard from '@/components/KPICard';
 import StatusBadge from '@/components/StatusBadge';
 import { customers, vehicles, parts, workOrders, invoices, users } from '@/lib/store';
 import { useLanguage } from '@/context/LanguageContext';
+import { translatePartName } from '@/lib/translations';
 import type { Customer, Vehicle, WorkOrder, Part, Invoice, User } from '@/lib/types';
 
 export default function Dashboard() {
-  const { t, formatCurrency, formatDate } = useLanguage();
+  const { t, lang, formatCurrency, formatDate } = useLanguage();
   const [data, setData] = useState<{
     customers: Customer[];
     vehicles: Vehicle[];
@@ -152,7 +153,7 @@ export default function Dashboard() {
                   <th>{t('inv_customer')}</th>
                   <th>{t('inv_status')}</th>
                   <th>{t('wo_technician')}</th>
-                  <th>Data</th>
+                  <th>{t('date')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -197,7 +198,7 @@ export default function Dashboard() {
               {data.lowStock.slice(0, 5).map((part) => (
                 <div key={part.id} className="flex items-center justify-between p-3 rounded-xl hover:bg-[var(--hover)] transition-colors">
                   <div>
-                    <p className="text-sm font-medium text-[var(--foreground)]">{part.name}</p>
+                    <p className="text-sm font-medium text-[var(--foreground)]">{translatePartName(part.name, lang)}</p>
                     <p className="text-xs text-[var(--muted)]">{part.sku}</p>
                   </div>
                   <div className="text-right">
@@ -218,22 +219,22 @@ export default function Dashboard() {
           <div className="card p-5 space-y-4">
             <h2 className="text-sm font-semibold text-[var(--foreground)]">{t('dash_quick_stats')}</h2>
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
+              <Link href="/customers" className="flex justify-between items-center hover:text-blue-400 transition-colors">
                 <span className="text-sm text-[var(--muted)]">{t('dash_total_customers')}</span>
                 <span className="text-sm font-semibold text-[var(--foreground)]">{data.customers.length}</span>
-              </div>
-              <div className="flex justify-between items-center">
+              </Link>
+              <Link href="/vehicles" className="flex justify-between items-center hover:text-blue-400 transition-colors">
                 <span className="text-sm text-[var(--muted)]">{t('dash_total_vehicles')}</span>
                 <span className="text-sm font-semibold text-[var(--foreground)]">{data.vehicles.length}</span>
-              </div>
-              <div className="flex justify-between items-center">
+              </Link>
+              <Link href="/team" className="flex justify-between items-center hover:text-blue-400 transition-colors">
                 <span className="text-sm text-[var(--muted)]">{t('dash_technicians')}</span>
                 <span className="text-sm font-semibold text-[var(--foreground)]">{data.usersList.filter(u => u.role === 'Technician').length}</span>
-              </div>
-              <div className="flex justify-between items-center">
+              </Link>
+              <Link href="/parts" className="flex justify-between items-center hover:text-blue-400 transition-colors">
                 <span className="text-sm text-[var(--muted)]">{t('dash_parts_in_catalog')}</span>
                 <span className="text-sm font-semibold text-[var(--foreground)]">{data.partsList.length}</span>
-              </div>
+              </Link>
             </div>
           </div>
         </div>

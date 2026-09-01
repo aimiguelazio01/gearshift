@@ -144,7 +144,10 @@ export interface User {
   name: string;
   role: UserRole;
   email: string;
+  phone?: string;
+  specialty?: string;
   hourly_rate: number | null; // technicians only
+  active?: boolean;
 }
 
 // Status pipeline order — use for Kanban column ordering & validation
