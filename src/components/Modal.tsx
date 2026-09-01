@@ -29,7 +29,7 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm overflow-hidden">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm overflow-y-auto">
       {/* Clickable Backdrop */}
       <div className="fixed inset-0 -z-10" onClick={onClose} aria-hidden="true" />
 
@@ -41,8 +41,8 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
           bg-[var(--card)] border border-[var(--border)]
           shadow-2xl shadow-black/70
           animate-in fade-in zoom-in-95 duration-150
-          max-h-[85vh] flex flex-col
-          overflow-hidden text-left m-auto
+          max-h-[90vh] flex flex-col min-h-0
+          text-left my-auto
         `}
       >
         {/* Fixed Header */}
