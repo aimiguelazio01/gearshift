@@ -10,7 +10,7 @@ import { matchesSearch, marginPercent } from '@/lib/utils';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { translateCategory, translatePartName, translatePartDesc } from '@/lib/translations';
-import type { Part, Supplier } from '@/lib/types';
+import type { Part, Supplier, StockMovement } from '@/lib/types';
 
 export default function PartsPage() {
   const { t, lang, formatCurrency } = useLanguage();
@@ -170,7 +170,7 @@ export default function PartsPage() {
     if (!adjustModal) return;
     const fd = new FormData(e.currentTarget);
     const qty = Number(fd.get('qty_change'));
-    const reason = fd.get('reason') as string;
+    const reason = fd.get('reason') as StockMovement['reason'];
     parts.adjustStock(adjustModal, qty, reason);
     setAdjustModal(null);
     reload();
